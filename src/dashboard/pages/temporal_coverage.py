@@ -97,7 +97,6 @@ def render(gcs_service):
     with st.container():
         st.subheader("Coverage Analysis")
         _render_summary_metrics(temporal_data, coverage_stats, selected_filters)
-        _render_under_labeled_analysis(coverage_stats)
 
 def _render_temporal_plots(data: Dict):
     """Render the temporal coverage plots"""
@@ -213,41 +212,6 @@ def _render_summary_metrics(data: Dict, stats: Dict, filters: Dict):
     
     # Show current selection context
     st.caption(f"Showing data for: {filters['client']} → {filters['region']} → {filters['field']} → {filters['tw']} → {filters['lb']}")
-
-def _render_under_labeled_analysis(stats: Dict):
-    """Render analysis of under-labeled timestamps"""
-    
-    under_labeled = stats['under_labeled_timestamps']
-    
-    if under_labeled:
-        st.subheader("⚠️ Under-labeled Timestamps")
-        st.write(f"Found {len(under_labeled)} timestamps with significant coverage gaps (>20%):")
-        
-        # Create a table of under-labeled timestamps
-        import pandas as pd
-        
-        df_data = []
-        for timestamp, gap_pct, raw_bags, ml_samples in under_labeled:
-            expected_samples = raw_bags * 85  # Use default for display
-            df_data.append({
-                'Timestamp': timestamp,
-                'Gap %': f"{gap_pct:.1f}%",
-                'Raw Bags': raw_bags,
-                'ML Samples': ml_samples,
-                'Expected': expected_samples,
-                'Missing': expected_samples - ml_samples
-            })
-        
-        df = pd.DataFrame(df_data)
-        st.dataframe(df, use_container_width=True)
-        
-        # Show worst case
-        worst_case = max(under_labeled, key=lambda x: x[1])
-        st.error(f"Worst coverage: {worst_case[0]} with {worst_case[1]:.1f}% gap ({worst_case[3]} samples from {worst_case[2]} bags)")
-        
-    else:
-        st.success("✅ No significantly under-labeled timestamps detected!")
-        st.info("All timestamps have less than 20% coverage gap.")
 
 def _format_timestamp(timestamp_str: str) -> str:
     """Format timestamp for display on plots"""
