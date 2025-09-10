@@ -73,7 +73,7 @@ class ServiceManager:
             logger.info("Initializing Analytics service...")
             analytics_service = AnalyticsService(
                 rosbag_service=rosbag_service,
-                cache_root=service_config.cache_root,
+                processed_root=service_config.processed_root,
                 enable_caching=self.config.enable_caching
             )
             self.services['analytics_service'] = analytics_service

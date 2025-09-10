@@ -31,18 +31,18 @@ class AnalyticsService:
     Computes metrics, generates plots, and manages caching.
     """
     
-    def __init__(self, rosbag_service: RosbagService, cache_root: Path, 
+    def __init__(self, rosbag_service: RosbagService, processed_root: Path, 
                  enable_caching: bool = True):
         """
         Initialize analytics service
         
         Args:
             rosbag_service: Service for loading extracted data
-            cache_root: Root directory for cached analysis
+            processed_root: Root directory for processed directory
             enable_caching: Whether to use caching
         """
         self.rosbag_service = rosbag_service
-        self.cache_root = Path(cache_root)
+        self.processed_root = Path(processed_root)
         self.enable_caching = enable_caching
         
         # Initialize calculators (these would be imported from refactored rosbag-analysis)
@@ -133,21 +133,31 @@ class AnalyticsService:
             fps_metrics = self.metrics_calculator.calculate_fps_metrics(data.frames_df)
             metrics.frame_fps_instant = fps_metrics.get('instant', [])
             metrics.frame_fps_rolling = fps_metrics.get('rolling', [])
-        # if data.detections_df is not None and not data.detections_df.empty:
-        #     metrics.detection_fps_instant, metrics.detection_fps_rolling = self.metrics_calculator.calculate_fps_metrics(data.detections_df)
-        
-        # if data.tracking_df is not None and not data.tracking_df.empty:
-        #     metrics.tracking_fps_instant, metrics.tracking_fps_rolling = self.metrics_calculator.calculate_fps_metrics(data.tracking_df)
 
-        # # Calculate latency metrics
-        # if data.detections_df is not None and not data.detections_df.empty:
-        #     latency_result = self.metrics_calculator.calculate_latencies(
-        #         data.detections_df, data.tracking_df
-        #     )
-        #     metrics.detection_latency_ms = latency_result.get('detection_latency', [])
-        #     if metrics.detection_latency_ms:
-        #         metrics.mean_latency_ms = np.mean(metrics.detection_latency_ms)
-        #         metrics.max_latency_ms = np.max(metrics.detection_latency_ms)
+        if data.detections_df is not None and not data.detections_df.empty:
+            fps_metrics = self.metrics_calculator.calculate_fps_metrics(data.detections_df)
+            metrics.detection_fps_instant = fps_metrics.get('instant', [])
+            metrics.detection_fps_rolling = fps_metrics.get('rolling', [])
+
+        if data.tracking_df is not None and not data.tracking_df.empty:
+            fps_metrics = self.metrics_calculator.calculate_fps_metrics(data.tracking_df)
+            metrics.tracking_fps_instant = fps_metrics.get('instant', [])
+            metrics.tracking_fps_rolling = fps_metrics.get('rolling', [])
+
+        # Calculate latency metrics
+        if data.detections_df is not None and not data.detections_df.empty:
+            latency_result = self.metrics_calculator.calculate_latencies(
+                data.detections_df, data.tracking_df
+            )
+            metrics.detection_latency_ms = latency_result.get('detection_latency', [])
+            if metrics.detection_latency_ms:
+                metrics.mean_detection_latency_ms = np.mean(metrics.detection_latency_ms)
+                metrics.max_detection_latency_ms = np.max(metrics.detection_latency_ms)
+
+            metrics.tracking_latency_ms = latency_result.get('tracking_latency', [])
+            if metrics.tracking_latency_ms:
+                metrics.mean_tracking_latency_ms = np.mean(metrics.tracking_latency_ms)
+                metrics.max_tracking_latency_ms = np.max(metrics.tracking_latency_ms)
         
         # # Calculate detection statistics
         # if data.detections_df is not None and not data.detections_df.empty:
@@ -187,44 +197,20 @@ class AnalyticsService:
                        metrics: AnalysisMetrics) -> AnalysisPlots:
         """
         Generate all plots from data and metrics
-        
-        Args:
-            data: Extracted rosbag data
-            metrics: Computed metrics
-            
-        Returns:
-            AnalysisPlots object with Plotly figures as JSON
         """
         plots = AnalysisPlots()
         
         # Generate FPS plot
         plots.fps_figure = self.plot_generator.generate_fps_plot(metrics)
 
+        # Generate latency plot (detection + tracking)
+        plots.latency_figure = self.plot_generator.generate_latency_plot(metrics)
 
-        # # Generate stats plot
-        # if data.detections_df is not None and data.tracking_df is not None:
-        #     plots.stats_figure = self.plot_generator.generate_stats_plot(
-        #         data.detections_df, data.tracking_df,
-        #         data.detections_json, data.tracking_json
-        #     )
-        
-        # # Generate latency plot
-        # if metrics.detection_latency_ms:
-        #     plots.latency_figure = self.plot_generator.generate_latency_plot(
-        #         metrics.detection_latency_ms
-        #     )
-        
-        # # Generate lifecycle plot
-        # if data.tracking_json:
-        #     plots.lifecycle_figure = self.plot_generator.generate_lifecycle_plot(
-        #         data.tracking_json
-        #     )
-        
         return plots
     
     def _cache_analysis(self, analysis: RunAnalysis):
         """Cache analysis results to disk"""
-        cache_path = self._get_cache_path(analysis.coordinate)
+        cache_path = self._get_analysis_cache_path(analysis.coordinate)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         
         analysis.cache_path = cache_path
@@ -237,7 +223,7 @@ class AnalyticsService:
     
     def _load_cached_analysis(self, coord: RunCoordinate) -> Optional[RunAnalysis]:
         """Load cached analysis from disk"""
-        cache_path = self._get_cache_path(coord)
+        cache_path = self._get_analysis_cache_path(coord)
         
         if not cache_path.exists():
             return None
@@ -256,9 +242,9 @@ class AnalyticsService:
         
         return None
     
-    def _get_cache_path(self, coord: RunCoordinate) -> Path:
+    def _get_analysis_cache_path(self, coord: RunCoordinate) -> Path:
         """Get cache file path for coordinate"""
-        return self.cache_root / coord.to_path_str() / "analysis.pkl"
+        return self.processed_root / coord.to_path_str() / "analysis.pkl"
 
 
 # ============================================================================
@@ -293,7 +279,7 @@ class MetricsCalculator:
         # Set interval to NaN at bag boundaries
         df.loc[df['bag_change'], 'interval_s'] = np.nan
         
-        # Calculate instantaneous FPS (without clipping for calculations)
+        # Calculate instantaneous FPS
         df['fps_instant_raw'] = 1.0 / df['interval_s'].where(df['interval_s'] > 0)
         
         # Rolling average on the raw FPS, handling NaN values
@@ -312,91 +298,94 @@ class MetricsCalculator:
         Returns dict with:
         - detection_latency: List of detection latencies in ms
         """
+        # Assert required columns exist in the dataframes
+        assert 'header_timestamp_s' and 'image_timestamp_s' in detections_df.columns, "detections_df must contain 'header_timestamp_s', 'image_timestamp_s' columns"
+        assert 'header_timestamp_s' and 'image_timestamp_s' in tracking_df.columns, "tracking_df must contain 'header_timestamp_s', 'image_timestamp_s' columns"
+
         det_df = detections_df.copy()
         track_df = tracking_df.copy()
         
         # Detection latency (ms) - time from image capture to detection output
-        det_df['latency_ms'] = (
-            (det_df['header_timestamp_secs'] - det_df['img_timestamp_secs']) * 1000 +
-            (det_df['header_timestamp_nsecs'] - det_df['img_timestamp_nsecs']) / 1e6
-        )
+        det_df['latency_ms'] =  1000 * (det_df['header_timestamp_s'] - det_df['image_timestamp_s'])
+        track_df['latency_ms'] = 1000 * (track_df['header_timestamp_s'] - track_df['image_timestamp_s'])
         
         # For now, only return detection latency as requested
         return {
-            'detection_latency': det_df['latency_ms']
+            'detection_latency': det_df['latency_ms'].to_list(),
+            'tracking_latency': track_df['latency_ms'].to_list()
         }
     
-    def calculate_track_lifecycles(self, tracking_json: Dict) -> pd.DataFrame:
-        """
-        Parse the raw tracking JSON and compute per-track lifecycles.
+    # def calculate_track_lifecycles(self, tracking_json: Dict) -> pd.DataFrame:
+    #     """
+    #     Parse the raw tracking JSON and compute per-track lifecycles.
 
-        Returns:
-            pd.DataFrame with columns:
-                - track_id
-                - active_frames
-                - track_span
-                - density
-                - avg_confidence
-                - max_confidence
-                - min_confidence
-                - first_seq
-                - last_seq
-        """
-        track_lifecycles = {}
+    #     Returns:
+    #         pd.DataFrame with columns:
+    #             - track_id
+    #             - active_frames
+    #             - track_span
+    #             - density
+    #             - avg_confidence
+    #             - max_confidence
+    #             - min_confidence
+    #             - first_seq
+    #             - last_seq
+    #     """
+    #     track_lifecycles = {}
                 
-        # First pass: collect all data
-        for msg_idx, track_msg in enumerate(tracking_json):
-            seq = track_msg['seq']
-            for obj in track_msg['tracked_objects']:
-                track_id = obj['tracking_id']
-                if track_id not in track_lifecycles:
-                    track_lifecycles[track_id] = {
-                        'confidences': [],
-                        'sequences': [],
-                        'count': 0
-                    }
-                track_lifecycles[track_id]['confidences'].append(obj['score'])
-                track_lifecycles[track_id]['sequences'].append(seq)
-                track_lifecycles[track_id]['count'] += 1
+    #     # First pass: collect all data
+    #     for msg_idx, track_msg in enumerate(tracking_json):
+    #         seq = track_msg['seq']
+    #         for obj in track_msg['tracked_objects']:
+    #             track_id = obj['tracking_id']
+    #             if track_id not in track_lifecycles:
+    #                 track_lifecycles[track_id] = {
+    #                     'confidences': [],
+    #                     'sequences': [],
+    #                     'count': 0
+    #                 }
+    #             track_lifecycles[track_id]['confidences'].append(obj['score'])
+    #             track_lifecycles[track_id]['sequences'].append(seq)
+    #             track_lifecycles[track_id]['count'] += 1
         
-        if not track_lifecycles:
-            return pd.DataFrame()
+    #     if not track_lifecycles:
+    #         return pd.DataFrame()
         
-        # Calculate metrics for each track
-        results = []
-        for tid, data in track_lifecycles.items():
-            sequences = sorted(data['sequences'])
+    #     # Calculate metrics for each track
+    #     results = []
+    #     for tid, data in track_lifecycles.items():
+    #         sequences = sorted(data['sequences'])
             
-            # Active frames (current metric)
-            active_frames = data['count']
+    #         # Active frames (current metric)
+    #         active_frames = data['count']
             
-            # Track span (new metric)
-            first_seq = sequences[0]
-            last_seq = sequences[-1]
-            track_span = last_seq - first_seq + 1
+    #         # Track span (new metric)
+    #         first_seq = sequences[0]
+    #         last_seq = sequences[-1]
+    #         track_span = last_seq - first_seq + 1
             
-            # Density (new metric) - ratio of active to span
-            density = active_frames / track_span if track_span > 0 else 0
+    #         # Density (new metric) - ratio of active to span
+    #         density = active_frames / track_span if track_span > 0 else 0
             
-            # Confidence metrics
-            confidences = data['confidences']
-            avg_confidence = np.mean(confidences)
-            max_confidence = np.max(confidences)
-            min_confidence = np.min(confidences)
+    #         # Confidence metrics
+    #         confidences = data['confidences']
+    #         avg_confidence = np.mean(confidences)
+    #         max_confidence = np.max(confidences)
+    #         min_confidence = np.min(confidences)
             
-            results.append({
-                'track_id': tid,
-                'active_frames': active_frames,
-                'track_span': track_span,
-                'density': density,
-                'avg_confidence': avg_confidence,
-                'max_confidence': max_confidence,
-                'min_confidence': min_confidence,
-                'first_seq': first_seq,
-                'last_seq': last_seq
-            })
+    #         results.append({
+    #             'track_id': tid,
+    #             'active_frames': active_frames,
+    #             'track_span': track_span,
+    #             'density': density,
+    #             'avg_confidence': avg_confidence,
+    #             'max_confidence': max_confidence,
+    #             'min_confidence': min_confidence,
+    #             'first_seq': first_seq,
+    #             'last_seq': last_seq
+    #         })
         
-        return pd.DataFrame(results)
+    #     return pd.DataFrame(results)
 
 
 # ============================================================================
@@ -411,7 +400,7 @@ class PlotGenerator:
     
     def generate_fps_plot(self,
                           metrics: AnalysisMetrics,
-                          fps_clip: float = 50.0,
+                          fps_clip: float = 60.0,
                           hline: float = 25.0
                           ) -> go.Figure:
         """
@@ -437,8 +426,8 @@ class PlotGenerator:
         
         sources = [
             (metrics.frame_fps_instant, metrics.frame_fps_rolling, "Frame", "blue"),
-            # (metrics.detection_fps_instant, metrics.detection_fps_rolling, "Detection", "green"),
-            # (metrics.tracking_fps_instant, metrics.tracking_fps_rolling, "Tracking", "orange"),
+            (metrics.detection_fps_instant, metrics.detection_fps_rolling, "Detection", "green"),
+            (metrics.tracking_fps_instant, metrics.tracking_fps_rolling, "Tracking", "orange"),
         ]
         
         for col, (inst, roll, name, color) in enumerate(sources, start=1):
@@ -507,15 +496,85 @@ class PlotGenerator:
         # ... (full implementation would go here)
         return {'data': [], 'layout': {}}  # Placeholder
     
-    def generate_latency_plot(self, latency_data: list) -> Dict:
+    def generate_latency_plot(self, metrics: AnalysisMetrics) -> go.Figure:
         """
-        Generate latency analysis plot
-        
-        Returns Plotly figure as JSON dict
+        Generate latency plots for detection & tracking in a 2×2 grid:
+          • Row 1 Col 1: Detection latency over time
+          • Row 1 Col 2: Detection latency distribution
+          • Row 2 Col 1: Tracking latency over time
+          • Row 2 Col 2: Tracking latency distribution
         """
-        # Implementation would generate the latency plot from rosbag-analysis
-        # ... (full implementation would go here)
-        return {'data': [], 'layout': {}}  # Placeholder
+        # build subplots
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=[
+                "Detection Latency Over Time", "Detection Latency Distribution",
+                "Tracking Latency Over Time",  "Tracking Latency Distribution"
+            ],
+            horizontal_spacing=0.15, vertical_spacing=0.15
+        )
+        det = metrics.detection_latency_ms or []
+        mean_det = metrics.mean_detection_latency_ms or 0
+        trk = metrics.tracking_latency_ms   or []
+        mean_trk = metrics.mean_tracking_latency_ms or 0
+
+        # Detection series + mean
+        if det:
+            fig.add_trace(
+                go.Scatter(x=list(range(len(det))), y=det,
+                           mode="lines", name="Detection Latency",
+                           line=dict(color="green", width=1)),
+                row=1, col=1
+            )
+            fig.add_hline(
+                y=mean_det, line_dash="dash", line_color="red", line_width=2,
+                annotation_text=f"Mean: {mean_det:.1f} ms",
+                annotation_position="right", row=1, col=1
+            )
+            fig.add_trace(
+                go.Histogram(x=det, name="Detection Latency",
+                             marker_color="green",
+                             xbins=dict(start=0, end=max(det), size=10)),
+                row=1, col=2
+            )
+
+        # Tracking series + mean
+        if trk:
+            fig.add_trace(
+                go.Scatter(x=list(range(len(trk))), y=trk,
+                           mode="lines", name="Tracking Latency",
+                           line=dict(color="orange", width=1)),
+                row=2, col=1
+            )
+            mean_trk = np.mean(trk)
+            fig.add_hline(
+                y=mean_trk, line_dash="dash", line_color="red", line_width=2,
+                annotation_text=f"Mean: {mean_trk:.1f} ms",
+                annotation_position="right", row=2, col=1
+            )
+            fig.add_trace(
+                go.Histogram(x=trk, name="Tracking Latency",
+                             marker_color="orange",
+                             xbins=dict(start=0, end=max(trk), size=10)),
+                row=2, col=2
+            )
+
+        # Label axes
+        fig.update_xaxes(title_text="Index",        row=1, col=1)
+        fig.update_xaxes(title_text="Latency (ms)", row=1, col=2)
+        fig.update_xaxes(title_text="Index",        row=2, col=1)
+        fig.update_xaxes(title_text="Latency (ms)", row=2, col=2)
+        fig.update_yaxes(title_text="Latency (ms)", row=1, col=1)
+        fig.update_yaxes(title_text="Count",        row=1, col=2)
+        fig.update_yaxes(title_text="Latency (ms)", row=2, col=1)
+        fig.update_yaxes(title_text="Count",        row=2, col=2)
+
+        fig.update_layout(
+            height=600,
+            margin=dict(l=60, r=20, t=60, b=60),
+            showlegend=False
+        )
+        return fig
     
     def generate_lifecycle_plot(self, tracking_json: Dict) -> Dict:
         """

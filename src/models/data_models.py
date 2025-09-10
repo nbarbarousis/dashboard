@@ -109,6 +109,10 @@ class AnalysisMetrics:
     detection_latency_ms: Optional[List[float]] = None
     mean_detection_latency_ms: Optional[float] = None
     max_detection_latency_ms: Optional[float] = None
+
+    tracking_latency_ms: Optional[List[float]] = None
+    mean_tracking_latency_ms: Optional[float] = None
+    max_tracking_latency_ms: Optional[float] = None
     
     # Detection statistics
     total_detections: Optional[int] = None

@@ -42,19 +42,10 @@ class DashboardConfig:
     docker_image_name: str = "rosbag-extractor"
     docker_auto_build: bool = False
     
-    # Analysis settings
-    analysis_params: Dict = field(default_factory=lambda: {
-        'fps_rolling_window': 25,
-        'latency_threshold_ms': 100.0,
-        'confidence_threshold': 0.5,
-        'track_density_threshold': 0.5
-    })
     
     # Download settings
     download_params: Dict = field(default_factory=lambda: {
         'conflict_resolution': 'skip',  # 'skip', 'overwrite', 'verify'
-        'parallel_downloads': 4,
-        'chunk_size': 1024 * 1024  # 1MB chunks
     })
     
     # ML settings
