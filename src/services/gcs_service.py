@@ -92,26 +92,6 @@ class GCSService:
         
         return self._discovered_data
     
-    def is_cache_valid(self, max_age_hours: int = 24) -> bool:
-        """
-        Check if cached data is valid and recent
-        
-        Args:
-            max_age_hours: Maximum age of cache in hours
-            
-        Returns:
-            True if cache is valid and recent, False otherwise
-        """
-        if not self._cache_info or not self.cache_file.exists():
-            return False
-        
-        try:
-            cache_time = datetime.fromisoformat(self._cache_info['timestamp'])
-            age = datetime.now() - cache_time
-            return age.total_seconds() < (max_age_hours * 3600)
-        except Exception:
-            return False
-    
     def get_cache_info(self) -> Dict:
         """
         Get information about cached data

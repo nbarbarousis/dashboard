@@ -1,27 +1,122 @@
 # src/dashboard/app.py
 """
-Main Streamlit dashboard application
+Main Streamlit dashboard application - enhanced version with all services
 """
 
 import logging
 import streamlit as st
+from pathlib import Path
+from typing import Dict, Optional
 
 # Local imports
-from config.dashboard_config import DEFAULT_CONFIG
+from config.dashboard_config import DEFAULT_CONFIG, DashboardConfig
+from models.data_models import ServiceConfig
 from services.gcs_service import GCSService
-from dashboard.utils.session_state import initialize_session_state, get_service, set_service
+from services.rosbag_service import RosbagService
+from services.analytics_service import AnalyticsService
+from services.download_service import DownloadService
+from dashboard.utils.session_state import (
+    initialize_session_state, get_service, set_service
+)
 from dashboard.pages import temporal_coverage, per_run_analysis, download_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class ServiceManager:
+    """Manages all dashboard services"""
+    
+    def __init__(self, config: DashboardConfig):
+        """Initialize service manager with configuration"""
+        self.config = config
+        self.services = {}
+        
+    def initialize_all_services(self) -> bool:
+        """
+        Initialize all required services
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get user paths
+            user_paths = self.config.get_user_paths()
+            
+            # Create service configuration
+            service_config = ServiceConfig.from_dashboard_config(
+                self.config, 
+                user_paths
+            )
+            
+            # 1. Initialize GCS service (existing)
+            logger.info("Initializing GCS service...")
+            gcs_service = GCSService(
+                bucket_names=self.config.bucket_names,
+                cache_file=self.config.cache_path
+            )
+            self.services['gcs_service'] = gcs_service
+            set_service('gcs_service', gcs_service)
+            
+            # 2. Initialize Rosbag service (new)
+            logger.info("Initializing Rosbag service...")
+            rosbag_service = RosbagService(
+                raw_root=service_config.raw_root,
+                processed_root=service_config.processed_root,
+                docker_image=self.config.docker_image_name
+            )
+            self.services['rosbag_service'] = rosbag_service
+            set_service('rosbag_service', rosbag_service)
+            
+            # 3. Initialize Analytics service (new)
+            logger.info("Initializing Analytics service...")
+            analytics_service = AnalyticsService(
+                rosbag_service=rosbag_service,
+                cache_root=service_config.cache_root,
+                enable_caching=self.config.enable_caching
+            )
+            self.services['analytics_service'] = analytics_service
+            set_service('analytics_service', analytics_service)
+            
+            # 4. Initialize Download service (new)
+            logger.info("Initializing Download service...")
+            download_service = DownloadService(
+                gcs_service=gcs_service,
+                raw_root=service_config.raw_root
+            )
+            self.services['download_service'] = download_service
+            set_service('download_service', download_service)
+            
+            # 5. Store service config for reference
+            set_service('service_config', service_config)
+            set_service('user_paths', user_paths)
+            
+            logger.info("All services initialized successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize services: {e}")
+            return False
+    
+    def get_service(self, name: str):
+        """Get a service by name"""
+        return self.services.get(name)
+
+
 class DataOverviewDashboard:
-    """Main dashboard application class"""
+    """Enhanced main dashboard application class"""
     
     def __init__(self, config=None):
         """Initialize dashboard with configuration"""
         self.config = config or DEFAULT_CONFIG
+        
+        # Validate configuration
+        if not self.config.validate():
+            raise ValueError("Invalid configuration")
+        
+        # Initialize service manager
+        self.service_manager = ServiceManager(self.config)
         
         # Define available pages
         self.pages = {
@@ -44,47 +139,41 @@ class DataOverviewDashboard:
         initialize_session_state()
         
         # Initialize services if needed
-        self._initialize_services()
+        if not st.session_state.get('services_initialized', False):
+            if self._initialize_services():
+                st.session_state.services_initialized = True
+            else:
+                st.error("Failed to initialize services. Please check configuration.")
+                st.stop()
+        
+        # Discover cloud data if needed
+        self._ensure_cloud_data_discovered()
         
         # Render dashboard
         self._render_dashboard()
     
-    def _initialize_services(self):
-        """Initialize services once per session"""
-        if not st.session_state.get('services_initialized', False):
-            try:
-                # Initialize GCS service
-                gcs_service = GCSService(
-                    bucket_names=self.config.bucket_names,
-                    cache_file="cache/gcs_data.json"
-                )
-                set_service('gcs_service', gcs_service)
-                
-                st.session_state.services_initialized = True
-                logger.info("Services initialized successfully")
-                
-            except Exception as e:
-                st.error(f"Failed to initialize services: {e}")
-                logger.error(f"Service initialization failed: {e}")
-                st.stop()
-        
-        # Discover cloud data if not done yet
+    def _initialize_services(self) -> bool:
+        """Initialize all services"""
+        return self.service_manager.initialize_all_services()
+    
+    def _ensure_cloud_data_discovered(self):
+        """Ensure cloud data is discovered and cached"""
         gcs_service = get_service('gcs_service')
+        
         if gcs_service and not st.session_state.get('data_discovered', False):
-            try:
-                # Discover data with progress feedback
-                def progress_callback(message):
-                    # Update a placeholder or just log for now
-                    logger.info(f"Discovery progress: {message}")
+            try:                
+                # Discover data
+                gcs_service.discover_and_cache(
+                    force_refresh=self.config.refresh_on_startup,
+                    progress_callback=lambda msg: logger.info(f"Discovery: {msg}")
+                )
                 
-                # Discover data (uses cache if available)
-                gcs_service.discover_and_cache(force_refresh=False, progress_callback=progress_callback)
                 st.session_state.data_discovered = True
                 logger.info("GCS data discovery completed")
+                
             except Exception as e:
                 st.error(f"Failed to discover cloud data: {e}")
                 logger.error(f"GCS data discovery failed: {e}")
-                st.stop()
     
     def _render_dashboard(self):
         """Render the main dashboard interface"""
@@ -111,10 +200,10 @@ class DataOverviewDashboard:
             
         except Exception as e:
             st.error(f"Error rendering page '{current_page}': {e}")
-            logger.error(f"Page rendering error: {e}")
+            logger.error(f"Page rendering error: {e}", exc_info=True)
     
     def _render_sidebar(self):
-        """Render sidebar navigation"""
+        """Render enhanced sidebar navigation"""
         st.sidebar.title("Navigation")
         
         # Page selection
@@ -133,12 +222,20 @@ class DataOverviewDashboard:
         
         st.sidebar.divider()
         
-        # Configuration info
-        st.sidebar.subheader("Configuration")
-        st.sidebar.text("Raw Bucket:")
-        st.sidebar.caption(f"{self.config.bucket_names['raw']}")
-        st.sidebar.text("ML Bucket:")
-        st.sidebar.caption(f"{self.config.bucket_names['ml']}")
+        # Configuration section
+        with st.sidebar.expander("Configuration", expanded=False):
+            st.text("Raw Bucket:")
+            st.caption(f"{self.config.bucket_names['raw']}")
+            st.text("ML Bucket:")
+            st.caption(f"{self.config.bucket_names['ml']}")
+            
+            # Path configuration
+            st.text("Data Paths:")
+            user_paths = get_service('user_paths')
+            if user_paths:
+                st.caption(f"Raw: {user_paths['raw_root']}")
+                st.caption(f"Processed: {user_paths['processed_root']}")
+                st.caption(f"Cache: {user_paths['cache_root']}")
         
         st.sidebar.divider()
         
@@ -154,33 +251,59 @@ class DataOverviewDashboard:
                 age_minutes = cache_info.get('age_minutes', 0)
                 
                 if age_hours > 0:
-                    st.sidebar.success(f"Data cached ({age_hours}h {age_minutes % 60}m ago)")
+                    st.sidebar.success(
+                        f"Data cached ({age_hours}h {age_minutes % 60}m ago)"
+                    )
                 else:
                     st.sidebar.success(f"Data cached ({age_minutes}m ago)")
                 
                 # Cache timestamp
                 cache_time = cache_info.get('timestamp')
                 if cache_time:
-                    st.sidebar.caption(f"Last updated: {cache_time.strftime('%Y-%m-%d %H:%M')}")
+                    st.sidebar.caption(
+                        f"Last updated: {cache_time.strftime('%Y-%m-%d %H:%M')}"
+                    )
             else:
                 st.sidebar.warning("No cached data")
             
-            # Refresh button (centered)
-            col1, col2, col3 = st.sidebar.columns([1, 2, 1])
-            with col2:
-                if st.button("🔄 Refresh Data", type="primary", use_container_width=True):
-                    with st.spinner("Refreshing cloud data..."):
-                        gcs_service.discover_and_cache(force_refresh=True)
-                        st.session_state.data_discovered = True
-                    st.sidebar.success("Data refreshed!")
-                    st.rerun()
+            # Refresh button
+            if st.sidebar.button("🔄 Refresh Data", type="primary", use_container_width=True):
+                with st.spinner("Refreshing cloud data..."):
+                    gcs_service.discover_and_cache(force_refresh=True)
+                    st.session_state.data_discovered = True
+                st.sidebar.success("Data refreshed!")
+                st.rerun()
         else:
             st.sidebar.error("GCS service unavailable")
+        
+        st.sidebar.divider()
+        
+        # Service Status (new)
+        with st.sidebar.expander("Service Status", expanded=False):
+            services = [
+                ('GCS', 'gcs_service'),
+                ('Rosbag', 'rosbag_service'),
+                ('Analytics', 'analytics_service'),
+                ('Download', 'download_service')
+            ]
+            
+            for name, service_key in services:
+                service = get_service(service_key)
+                if service:
+                    st.success(f"✅ {name}")
+                else:
+                    st.error(f"❌ {name}")
+
 
 def main():
     """Entry point for the dashboard application"""
-    dashboard = DataOverviewDashboard()
-    dashboard.run()
+    try:
+        dashboard = DataOverviewDashboard()
+        dashboard.run()
+    except Exception as e:
+        st.error(f"Dashboard initialization failed: {e}")
+        logger.error(f"Dashboard initialization failed: {e}", exc_info=True)
+
 
 if __name__ == "__main__":
     main()
