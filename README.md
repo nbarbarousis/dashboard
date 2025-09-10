@@ -10,21 +10,14 @@ src/
 │   ├── components/
 │   │   ├── __init__.py
 │   │   ├── filters.py            # Hierarchical filtering UI
-│   │   ├── plots.py              # Reusable plot components
-│   │   └── metrics.py            # Summary metric cards
 │   └── utils/
 │       ├── __init__.py
 │       ├── session_state.py      # Session state management
-│       └── formatting.py         # Data formatting utilities
 ├── services/
 │   ├── __init__.py
-│   ├── cloud_discovery.py        # Core cloud data discovery
-│   ├── analytics_service.py      # Analytics integration
-│   └── cloud_operations.py       # Download/upload operations
+│   ├── data_service.py           # Analytics data service
+│   ├── gcs_service.py      # Cloud gcs service
 ├── models/
-│   ├── __init__.py
-│   ├── hierarchy.py              # Data hierarchy models
-│   └── cloud_data.py             # Cloud data structures
 ├── config/
 │   ├── __init__.py
 │   └── dashboard_config.py       # Dashboard configuration
@@ -34,4 +27,4 @@ src/
 # Root level files
 requirements.txt                  # Dashboard dependencies
 dashboard_main.py                 # Main entry point
-README_dashboard.md               # Dashboard documentation
+README.md                         # Dashboard documentation
