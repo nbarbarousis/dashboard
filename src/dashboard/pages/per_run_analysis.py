@@ -176,7 +176,7 @@ def render(gcs_service):
                         if job.status == ProcessingStatus.COMPLETE:
                             st.success("Extraction complete!")
                             st.rerun()
-                        else:
+                        elif job.status == ProcessingStatus.FAILED:
                             st.error(f"Extraction failed: {job.error_message}")
                             if job.docker_output:
                                 with st.expander("Docker Output"):

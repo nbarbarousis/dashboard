@@ -7,7 +7,7 @@ import logging
 import pickle
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -152,32 +152,22 @@ class AnalyticsService:
             metrics.detection_latency_ms = latency_result.get('detection_latency', [])
             if metrics.detection_latency_ms:
                 metrics.mean_detection_latency_ms = np.mean(metrics.detection_latency_ms)
-                metrics.max_detection_latency_ms = np.max(metrics.detection_latency_ms)
 
             metrics.tracking_latency_ms = latency_result.get('tracking_latency', [])
             if metrics.tracking_latency_ms:
                 metrics.mean_tracking_latency_ms = np.mean(metrics.tracking_latency_ms)
-                metrics.max_tracking_latency_ms = np.max(metrics.tracking_latency_ms)
-        
-        # # Calculate detection statistics
-        # if data.detections_df is not None and not data.detections_df.empty:
-        #     metrics.total_detections = data.detections_df['num_detections'].sum()
-        #     metrics.avg_detections_per_frame = data.detections_df['num_detections'].mean()
+
+        if data.detections_json is not None and data.tracking_json is not None:
+            result = self.metrics_calculator.calculate_time_series(data.detections_json, data.tracking_json)
             
-        #     # Confidence distribution from JSON data
-        #     if data.detections_json:
-        #         confidences = []
-        #         for msg in data.detections_json:
-        #             for det in msg.get('detections', []):
-        #                 confidences.append(det.get('score', 0))
-                
-        #         if confidences:
-        #             metrics.detection_confidence_dist = {
-        #                 'bins': np.histogram(confidences, bins=20, range=(0, 1))[0].tolist(),
-        #                 'mean': np.mean(confidences),
-        #                 'std': np.std(confidences)
-        #             }
-        
+            metrics.detections_over_time = result.get('detections_over_time', [])
+            metrics.detections_confidence_dist = result.get('detections_confidence_dist', [])
+            metrics.avg_detection_confidence = result.get('avg_detection_confidence', 0.0)
+            metrics.tracks_over_time = result.get('tracks_over_time', [])
+            metrics.tracks_confidence_dist = result.get('tracks_confidence_dist', [])
+            metrics.avg_track_confidence = result.get('avg_track_confidence', 0.0)
+            
+
         # # Calculate tracking statistics
         # if data.tracking_df is not None and not data.tracking_df.empty:
         #     metrics.total_tracks = data.tracking_df['num_tracked'].sum()
@@ -190,6 +180,8 @@ class AnalyticsService:
         #         if track_stats:
         #             metrics.avg_track_lifetime = track_stats.get('avg_lifetime')
         #             metrics.track_density_dist = track_stats.get('density_dist')
+
+        metrics.computation_time = datetime.now() - metrics.computation_time
         
         return metrics
     
@@ -202,6 +194,9 @@ class AnalyticsService:
         
         # Generate FPS plot
         plots.fps_figure = self.plot_generator.generate_fps_plot(metrics)
+
+        # Generate stats plot
+        plots.stats_figure = self.plot_generator.generate_stats_plot(metrics)
 
         # Generate latency plot (detection + tracking)
         plots.latency_figure = self.plot_generator.generate_latency_plot(metrics)
@@ -314,6 +309,60 @@ class MetricsCalculator:
             'detection_latency': det_df['latency_ms'].to_list(),
             'tracking_latency': track_df['latency_ms'].to_list()
         }
+    
+    def calculate_time_series(self, detections: List[Dict], tracks: List[Dict]) -> Dict:
+        """
+        Calculate time series data from raw JSON
+        
+        Returns dict with:
+        - detections_over_time: List of detection counts over time
+        - detections_confidence_dist: List[int] histogram of detection confidences
+        - tracks_over_time: List of tracks counts over time
+        - tracks_confidence_dist: List[int] histogram of track confidences
+        """
+
+        import numpy as np
+        from itertools import chain
+
+        # time‐series already extracted
+        detections_over_time = [msg['num_detections'] for msg in detections]
+        tracks_over_time     = [msg['num_tracked'] for msg in tracks]
+
+        # flatten all detection scores in one go
+        detection_confidences = [
+            obj['score']
+            for msg in detections
+            for obj in msg['detections']
+        ]
+
+        # flatten all track   scores in one go
+        track_confidences = [
+            obj['score']
+            for msg in tracks
+            for obj in msg['tracked_objects']
+        ]
+
+        # average confidences (just as an example—you can drop these if you only need the hist)
+        avg_det_conf = float(np.mean(detection_confidences)) if detection_confidences else 0.0
+        avg_trk_conf = float(np.mean(track_confidences)) if track_confidences else 0.0
+
+        # build a 20‐bin histogram over [0,1]
+        det_hist, _ = np.histogram(detection_confidences, bins=20, range=(0,1))
+        trk_hist, _ = np.histogram(track_confidences,   bins=24, range=(0,1.2))
+
+        return {
+            'detections_over_time':        detections_over_time,
+            'detections_confidence_dist':  det_hist.tolist(),
+            'tracks_over_time':            tracks_over_time,
+            'tracks_confidence_dist':      trk_hist.tolist(),
+            'avg_detection_confidence':    avg_det_conf,
+            'avg_track_confidence':        avg_trk_conf
+        }
+    
+
+
+
+        
     
     # def calculate_track_lifecycles(self, tracking_json: Dict) -> pd.DataFrame:
     #     """
@@ -483,18 +532,136 @@ class PlotGenerator:
         )
         return fig
     
-    def generate_stats_plot(self, detections_df: pd.DataFrame,
-                           tracking_df: pd.DataFrame,
-                           detections_json: Dict,
-                           tracking_json: Dict) -> Dict:
+    def generate_stats_plot(self,
+                            metrics: AnalysisMetrics) -> go.Figure:
         """
         Generate detection/tracking statistics plot
         
         Returns Plotly figure as JSON dict
         """
-        # Implementation would generate the 2x3 stats plot from rosbag-analysis
-        # ... (full implementation would go here)
-        return {'data': [], 'layout': {}}  # Placeholder
+        import numpy as np
+        from plotly.subplots import make_subplots
+
+        # 2×3 grid
+        fig = make_subplots(
+            rows=2, cols=3,
+            subplot_titles=[
+                'Detection Count per Frame',
+                'Detection Count Distribution',
+                'Detection Confidence Distribution',
+                'Track Count per Frame',
+                'Track Count Distribution',
+                'Track Confidence Distribution'
+            ],
+            specs=[
+                [{'type': 'scatter'}, {'type': 'histogram'}, {'type': 'bar'}],
+                [{'type': 'scatter'}, {'type': 'histogram'}, {'type': 'bar'}]
+            ],
+            horizontal_spacing=0.12,
+            vertical_spacing=0.15
+        )
+
+        # Row 1 Col 1: Detection count over time
+        det_time = metrics.detections_over_time or []
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(det_time))),
+                y=det_time,
+                mode='lines+markers',
+                line=dict(color='green', width=1),
+                marker=dict(size=3),
+                name='Detections'
+            ),
+            row=1, col=1
+        )
+        # Row 1 Col 2: Detection count distribution
+        if det_time:
+            fig.add_trace(
+                go.Histogram(
+                    x=det_time,
+                    marker_color='green',
+                    opacity=0.7,
+                    xbins=dict(start=0, end=max(det_time)+1, size=1),
+                    name='Det Count Dist'
+                ),
+                row=1, col=2
+            )
+        # Row 1 Col 3: Detection confidence distribution
+        det_conf = metrics.detections_confidence_dist or []
+        if det_conf:
+            bins = np.linspace(0, 1, len(det_conf)+1)
+            centers = (bins[:-1] + bins[1:]) / 2
+            fig.add_trace(
+                go.Bar(
+                    x=centers,
+                    y=det_conf,
+                    marker_color='green',
+                    name='Det Conf Dist'
+                ),
+                row=1, col=3
+            )
+
+        # Row 2 Col 1: Track count over time
+        trk_time = metrics.tracks_over_time or []
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(trk_time))),
+                y=trk_time,
+                mode='lines+markers',
+                line=dict(color='orange', width=1),
+                marker=dict(size=3),
+                name='Tracks'
+            ),
+            row=2, col=1
+        )
+        # Row 2 Col 2: Track count distribution
+        if trk_time:
+            fig.add_trace(
+                go.Histogram(
+                    x=trk_time,
+                    marker_color='orange',
+                    opacity=0.7,
+                    xbins=dict(start=0, end=max(trk_time)+1, size=1),
+                    name='Track Count Dist'
+                ),
+                row=2, col=2
+            )
+        # Row 2 Col 3: Track confidence distribution
+        trk_conf = metrics.tracks_confidence_dist or []
+        if trk_conf:
+            bins = np.linspace(0, 1.2, len(trk_conf)+1)
+            centers = (bins[:-1] + bins[1:]) / 2
+            fig.add_trace(
+                go.Bar(
+                    x=centers,
+                    y=trk_conf,
+                    marker_color='orange',
+                    name='Track Conf Dist'
+                ),
+                row=2, col=3
+            )
+
+        # Axes labels
+        fig.update_xaxes(title_text="Frame Index", row=1, col=1)
+        fig.update_xaxes(title_text="Detections per Frame", row=1, col=2)
+        fig.update_xaxes(title_text="Confidence", row=1, col=3, range=[0,1])
+        fig.update_xaxes(title_text="Frame Index", row=2, col=1)
+        fig.update_xaxes(title_text="Tracks per Frame", row=2, col=2)
+        fig.update_xaxes(title_text="Confidence", row=2, col=3, range=[0,1.2])
+
+        fig.update_yaxes(title_text="Count", row=1, col=1)
+        fig.update_yaxes(title_text="Frequency", row=1, col=2)
+        fig.update_yaxes(title_text="Frequency", row=1, col=3)
+        fig.update_yaxes(title_text="Count", row=2, col=1)
+        fig.update_yaxes(title_text="Frequency", row=2, col=2)
+        fig.update_yaxes(title_text="Frequency", row=2, col=3)
+
+        fig.update_layout(
+            height=600,
+            showlegend=False,
+            margin=dict(l=60, r=20, t=60, b=60)
+        )
+        return fig
     
     def generate_latency_plot(self, metrics: AnalysisMetrics) -> go.Figure:
         """

@@ -108,17 +108,18 @@ class AnalysisMetrics:
     # Latency metrics
     detection_latency_ms: Optional[List[float]] = None
     mean_detection_latency_ms: Optional[float] = None
-    max_detection_latency_ms: Optional[float] = None
 
     tracking_latency_ms: Optional[List[float]] = None
     mean_tracking_latency_ms: Optional[float] = None
-    max_tracking_latency_ms: Optional[float] = None
-    
-    # Detection statistics
-    total_detections: Optional[int] = None
-    avg_detections_per_frame: Optional[float] = None
-    detection_confidence_dist: Optional[Dict] = None
-    
+
+    detections_over_time: Optional[List[int]] = None
+    detections_confidence_dist: Optional[List[int]] = None
+    avg_detection_confidence: Optional[float] = None
+
+    tracks_over_time: Optional[List[int]] = None
+    tracks_confidence_dist: Optional[List[int]] = None
+    avg_track_confidence: Optional[float] = None
+
     # Tracking statistics
     total_tracks: Optional[int] = None
     avg_track_lifetime: Optional[float] = None
@@ -133,9 +134,9 @@ class AnalysisMetrics:
 class AnalysisPlots:
     """Container for generated analysis plots"""
     fps_figure: go.Figure = None  
-    stats_figure: Optional[Dict] = None
-    latency_figure: Optional[Dict] = None
-    lifecycle_figure: Optional[Dict] = None
+    stats_figure: go.Figure = None
+    latency_figure: go.Figure = None
+    lifecycle_figure: go.Figure = None
     # Additional plots can be added here
 
 
