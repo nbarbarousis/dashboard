@@ -32,8 +32,9 @@ def render(gcs_service):
     analytics_service = get_service('analytics_service')
     rosbag_service = get_service('rosbag_service')
     download_service = get_service('download_service')
+    extraction_service = get_service('extraction_service')
     
-    if not all([analytics_service, rosbag_service, download_service]):
+    if not all([analytics_service, rosbag_service, download_service, extraction_service]):
         st.error("Required services not initialized. Please restart the application.")
         return
     
@@ -159,7 +160,9 @@ def render(gcs_service):
                 
                 if download_status['downloaded'] and st.button("Extract", key="extract_btn"):
                     with st.spinner("Creating extraction job..."):
-                        job = rosbag_service.create_extraction_job(coord)
+                        source_path = rosbag_service._get_raw_path(coord)
+                        output_path = rosbag_service._get_processed_path(coord)
+                        job = extraction_service.create_extraction_job(coord, source_path, output_path)
                     
                     if job.status != ProcessingStatus.COMPLETE:
                         progress_bar = st.progress(0)
@@ -167,7 +170,7 @@ def render(gcs_service):
                         
                         with st.spinner(f"Extracting from {job.total_bags} bags..."):
                             # Execute extraction
-                            job = rosbag_service.execute_extraction(job)
+                            job = extraction_service.execute_extraction(job)
                             
                             # Update progress
                             progress_bar.progress(1.0)
@@ -378,7 +381,7 @@ def _generate_html_report(analysis) -> str:
         <div class="header">
             <h1>Run Analysis Report</h1>
             <p>Timestamp: {analysis.coordinate.timestamp}</p>
-            <p>Location: {analysis.coordinate.cid}/{analysis.coordinate.regionid}/{analysis.coordinate.fieldid}</p>
+            <p>Location: {analysis.coordinate.cid}/{analysis.coordinate.regionid}/{analysis.coordinate.fieldid}/{analysis.coordinate.tw}</p>
         </div>
         
         <div class="plot-container">

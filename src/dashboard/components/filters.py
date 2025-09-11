@@ -359,6 +359,6 @@ class HierarchicalFilters:
         
         try:
             timestamps = hierarchy[filters['client']][filters['region']][filters['field']][filters['tw']][filters['lb']]
-            return sorted(timestamps)
+            return sorted(timestamps, reverse=True)
         except KeyError:
             return []

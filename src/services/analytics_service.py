@@ -243,7 +243,7 @@ class AnalyticsService:
 
 
 # ============================================================================
-# Metrics Calculator - Skeleton (would be fully implemented from rosbag-analysis)
+# Metrics Calculator
 # ============================================================================
 
 class MetricsCalculator:
@@ -395,13 +395,12 @@ class MetricsCalculator:
 
 
 # ============================================================================
-# Plot Generator - Skeleton (would be fully implemented from rosbag-analysis)
+# Plot Generator
 # ============================================================================
 
 class PlotGenerator:
     """
     Generator for analysis plots.
-    This is a skeleton - full implementation would come from rosbag-analysis/plotting.py
     """
     
     def generate_fps_plot(self,

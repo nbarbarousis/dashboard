@@ -11,6 +11,7 @@ from typing import Dict, Optional
 # Local imports
 from config.dashboard_config import DEFAULT_CONFIG, DashboardConfig
 from models.data_models import ServiceConfig
+from services.extraction_service import ExtractionService
 from services.gcs_service import GCSService
 from services.rosbag_service import RosbagService
 from services.analytics_service import AnalyticsService
@@ -58,13 +59,18 @@ class ServiceManager:
             )
             self.services['gcs_service'] = gcs_service
             set_service('gcs_service', gcs_service)
+
+            # Extraction Service
+            extraction_service = ExtractionService(
+               docker_image="rosbag-extractor"
+           )
+            set_service('extraction_service', extraction_service)
             
             # 2. Initialize Rosbag service (new)
             logger.info("Initializing Rosbag service...")
             rosbag_service = RosbagService(
                 raw_root=service_config.raw_root,
                 processed_root=service_config.processed_root,
-                docker_image=self.config.docker_image_name
             )
             self.services['rosbag_service'] = rosbag_service
             set_service('rosbag_service', rosbag_service)
@@ -73,8 +79,7 @@ class ServiceManager:
             logger.info("Initializing Analytics service...")
             analytics_service = AnalyticsService(
                 rosbag_service=rosbag_service,
-                processed_root=service_config.processed_root,
-                enable_caching=self.config.enable_caching
+                processed_root=service_config.processed_root
             )
             self.services['analytics_service'] = analytics_service
             set_service('analytics_service', analytics_service)
@@ -190,9 +195,8 @@ class DataOverviewDashboard:
 
         st.markdown("")  # spacing
 
-        # (Page now driven by the buttons above)
 
-        # Sidebar navigation (without page selection)
+        # Sidebar navigation
         self._render_sidebar()
         
         # Get current page selection
