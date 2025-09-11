@@ -124,6 +124,7 @@ class AnalysisMetrics:
     total_tracks: Optional[int] = None
     avg_track_lifetime: Optional[float] = None
     track_density_dist: Optional[Dict] = None
+    track_lifecycles: Optional[pd.DataFrame] = None
     
     # Computation metadata
     computation_time: Optional[datetime] = None

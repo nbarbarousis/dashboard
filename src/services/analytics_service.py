@@ -168,18 +168,16 @@ class AnalyticsService:
             metrics.avg_track_confidence = result.get('avg_track_confidence', 0.0)
             
 
-        # # Calculate tracking statistics
-        # if data.tracking_df is not None and not data.tracking_df.empty:
-        #     metrics.total_tracks = data.tracking_df['num_tracked'].sum()
-            
-        #     # Track lifecycle analysis from JSON data
-        #     if data.tracking_json:
-        #         track_stats = self.metrics_calculator.calculate_track_lifecycles(
-        #             data.tracking_json
-        #         )
-        #         if track_stats:
-        #             metrics.avg_track_lifetime = track_stats.get('avg_lifetime')
-        #             metrics.track_density_dist = track_stats.get('density_dist')
+        if data.tracking_json:
+            df_lc = self.metrics_calculator.calculate_track_lifecycles(data.tracking_json)
+            metrics.track_lifecycles    = df_lc
+            metrics.total_tracks        = len(df_lc)
+            metrics.avg_track_lifetime  = float(df_lc['track_span'].mean()) if not df_lc.empty else 0.0
+
+            # density histogram (20 bins 0–1)
+            dens = df_lc['density'].tolist()
+            hist, _ = np.histogram(dens, bins=20, range=(0,1))
+            metrics.track_density_dist = hist.tolist()
 
         metrics.computation_time = datetime.now() - metrics.computation_time
         
@@ -200,6 +198,8 @@ class AnalyticsService:
 
         # Generate latency plot (detection + tracking)
         plots.latency_figure = self.plot_generator.generate_latency_plot(metrics)
+
+        plots.lifecycle_figure = self.plot_generator.generate_lifecycle_plot(metrics)
 
         return plots
     
@@ -359,82 +359,39 @@ class MetricsCalculator:
             'avg_track_confidence':        avg_trk_conf
         }
     
+    def calculate_track_lifecycles(self, track_full: List[Dict]) -> pd.DataFrame:
+        """Compute per‐track span, density, confidence stats."""
+        track_lifecycles = {}
+        for msg in track_full:
+            seq = msg['seq']
+            for obj in msg['tracked_objects']:
+                tid = obj['tracking_id']
+                rec = track_lifecycles.setdefault(tid, {'confidences': [], 'sequences': [], 'count': 0})
+                rec['confidences'].append(obj['score'])
+                rec['sequences'].append(seq)
+                rec['count'] += 1
+        if not track_lifecycles:
+            return pd.DataFrame()
 
-
-
-        
-    
-    # def calculate_track_lifecycles(self, tracking_json: Dict) -> pd.DataFrame:
-    #     """
-    #     Parse the raw tracking JSON and compute per-track lifecycles.
-
-    #     Returns:
-    #         pd.DataFrame with columns:
-    #             - track_id
-    #             - active_frames
-    #             - track_span
-    #             - density
-    #             - avg_confidence
-    #             - max_confidence
-    #             - min_confidence
-    #             - first_seq
-    #             - last_seq
-    #     """
-    #     track_lifecycles = {}
-                
-    #     # First pass: collect all data
-    #     for msg_idx, track_msg in enumerate(tracking_json):
-    #         seq = track_msg['seq']
-    #         for obj in track_msg['tracked_objects']:
-    #             track_id = obj['tracking_id']
-    #             if track_id not in track_lifecycles:
-    #                 track_lifecycles[track_id] = {
-    #                     'confidences': [],
-    #                     'sequences': [],
-    #                     'count': 0
-    #                 }
-    #             track_lifecycles[track_id]['confidences'].append(obj['score'])
-    #             track_lifecycles[track_id]['sequences'].append(seq)
-    #             track_lifecycles[track_id]['count'] += 1
-        
-    #     if not track_lifecycles:
-    #         return pd.DataFrame()
-        
-    #     # Calculate metrics for each track
-    #     results = []
-    #     for tid, data in track_lifecycles.items():
-    #         sequences = sorted(data['sequences'])
-            
-    #         # Active frames (current metric)
-    #         active_frames = data['count']
-            
-    #         # Track span (new metric)
-    #         first_seq = sequences[0]
-    #         last_seq = sequences[-1]
-    #         track_span = last_seq - first_seq + 1
-            
-    #         # Density (new metric) - ratio of active to span
-    #         density = active_frames / track_span if track_span > 0 else 0
-            
-    #         # Confidence metrics
-    #         confidences = data['confidences']
-    #         avg_confidence = np.mean(confidences)
-    #         max_confidence = np.max(confidences)
-    #         min_confidence = np.min(confidences)
-            
-    #         results.append({
-    #             'track_id': tid,
-    #             'active_frames': active_frames,
-    #             'track_span': track_span,
-    #             'density': density,
-    #             'avg_confidence': avg_confidence,
-    #             'max_confidence': max_confidence,
-    #             'min_confidence': min_confidence,
-    #             'first_seq': first_seq,
-    #             'last_seq': last_seq
-    #         })
-        
-    #     return pd.DataFrame(results)
+        rows = []
+        for tid, d in track_lifecycles.items():
+            seqs = sorted(d['sequences'])
+            active = d['count']
+            span = seqs[-1] - seqs[0] + 1
+            density = active / span if span>0 else 0
+            confs = np.array(d['confidences'])
+            rows.append({
+                'track_id':        tid,
+                'active_frames':   active,
+                'track_span':      span,
+                'density':         density,
+                'avg_confidence':  confs.mean(),
+                'max_confidence':  confs.max(),
+                'min_confidence':  confs.min(),
+                'first_seq':       seqs[0],
+                'last_seq':        seqs[-1]
+            })
+        return pd.DataFrame(rows)
 
 
 # ============================================================================
@@ -657,7 +614,7 @@ class PlotGenerator:
         fig.update_yaxes(title_text="Frequency", row=2, col=3)
 
         fig.update_layout(
-            height=600,
+            height=900,
             showlegend=False,
             margin=dict(l=60, r=20, t=60, b=60)
         )
@@ -743,12 +700,101 @@ class PlotGenerator:
         )
         return fig
     
-    def generate_lifecycle_plot(self, tracking_json: Dict) -> Dict:
-        """
-        Generate track lifecycle plot
-        
-        Returns Plotly figure as JSON dict
-        """
-        # Implementation would generate the 2x2 lifecycle plot from rosbag-analysis
-        # ... (full implementation would go here)
-        return {'data': [], 'layout': {}}  # Placeholder
+    def generate_lifecycle_plot(self, metrics: AnalysisMetrics) -> go.Figure:
+        import numpy as np
+        from plotly.subplots import make_subplots
+
+        df = metrics.track_lifecycles if metrics.track_lifecycles is not None else pd.DataFrame()
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=[
+                'Track Span Distribution',
+                'Active Frames Distribution',
+                'Density Distribution',
+                'Confidence vs Track Span'
+            ],
+            specs=[
+                [{'type':'histogram'},{'type':'histogram'}],
+                [{'type':'histogram'},{'type':'scatter'}]
+            ],
+            horizontal_spacing=0.12, vertical_spacing=0.2,
+            row_heights=[0.5,0.5]
+        )
+
+        if not df.empty:
+            spans   = df['track_span']
+            active  = df['active_frames']
+            density = df['density']
+            avgc    = df['avg_confidence']
+
+            # span hist
+            fig.add_trace(
+                go.Histogram(x=spans, xbins=dict(start=0,end=spans.max(),size=5),
+                             marker_color='#8B4789', opacity=0.7, showlegend=False),
+                row=1, col=1
+            )
+            fig.add_vline(x=spans.mean(), line_dash='dash', line_color='red', row=1, col=1)
+            fig.add_annotation(x=spans.mean(), y=0.95, yref='y domain',
+                               text=f'μ={spans.mean():.1f}', showarrow=False,
+                               font=dict(color='red', size=11),
+                               row=1, col=1)
+
+            # active hist
+            fig.add_trace(
+                go.Histogram(x=active, xbins=dict(start=0,end=active.max(),size=5),
+                             marker_color='#D2691E', opacity=0.7, showlegend=False),
+                row=1, col=2
+            )
+            fig.add_vline(x=active.mean(), line_dash='dash', line_color='red', row=1, col=2)
+            fig.add_annotation(x=active.mean(), y=0.95, yref='y domain',
+                               text=f'μ={active.mean():.1f}', showarrow=False,
+                               font=dict(color='red', size=11),
+                               row=1, col=2)
+
+            # density hist
+            fig.add_trace(
+                go.Histogram(x=density, xbins=dict(start=0,end=1.0,size=0.05),
+                             marker_color='#4682B4', opacity=0.7, showlegend=False),
+                row=2, col=1
+            )
+            fig.add_vline(x=density.mean(), line_dash='dash', line_color='red', row=2, col=1)
+            fig.add_annotation(x=density.mean(), y=0.95, yref='y domain',
+                               text=f'μ={density.mean():.2f}', showarrow=False,
+                               font=dict(color='red', size=11),
+                               row=2, col=1)
+            # quality lines
+            fig.add_vline(x=0.9, line_dash='dot', line_color='green', row=2, col=1)
+            fig.add_vline(x=0.5, line_dash='dot', line_color='orange', row=2, col=1)
+
+            # scatter avg conf vs span
+            fig.add_trace(
+                go.Scatter(
+                    x=avgc, y=spans,
+                    mode='markers',
+                    marker=dict(
+                        size=8,
+                        color=density,
+                        colorscale='RdYlGn',
+                        cmin=0, cmax=1,
+                        showscale=True,
+                        colorbar=dict(title='Density')
+                    ),
+                    hovertemplate='AvgConf: %{x:.2f}<br>Span: %{y}<br>Density: %{marker.color:.2f}<extra></extra>',
+                    showlegend=False
+                ),
+                row=2, col=2
+            )
+
+        # axis labels
+        fig.update_xaxes(title_text='Track Span (frames)', row=1, col=1)
+        fig.update_xaxes(title_text='Active Frames',    row=1, col=2)
+        fig.update_xaxes(title_text='Density',          row=2, col=1)
+        fig.update_xaxes(title_text='Avg Confidence',   row=2, col=2)
+
+        fig.update_yaxes(title_text='Count', row=1, col=1)
+        fig.update_yaxes(title_text='Count', row=1, col=2)
+        fig.update_yaxes(title_text='Frequency', row=2, col=1)
+        fig.update_yaxes(title_text='Track Span', row=2, col=2)
+
+        fig.update_layout(height=800, margin=dict(l=60,r=60,t=80,b=60))
+        return fig
