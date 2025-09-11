@@ -179,9 +179,20 @@ class DataOverviewDashboard:
         """Render the main dashboard interface"""
         # Main title
         st.title("📊 Data Overview Dashboard")
-        st.markdown("*Cloud-first data management and analytics interface*")
         
-        # Sidebar navigation
+        # Page tabs as centered buttons
+        pages = list(self.pages.keys())
+        cols = st.columns(len(pages))
+        for idx, page_name in enumerate(pages):
+            if cols[idx].button(page_name, key=f"nav_{page_name.replace(' ', '_')}", use_container_width=True):
+                st.session_state.current_page = page_name
+                st.rerun()
+
+        st.markdown("")  # spacing
+
+        # (Page now driven by the buttons above)
+
+        # Sidebar navigation (without page selection)
         self._render_sidebar()
         
         # Get current page selection
@@ -206,19 +217,8 @@ class DataOverviewDashboard:
         """Render enhanced sidebar navigation"""
         st.sidebar.title("Navigation")
         
-        # Page selection
-        selected_page = st.sidebar.selectbox(
-            "Select Page",
-            list(self.pages.keys()),
-            index=list(self.pages.keys()).index(
-                st.session_state.get('current_page', self.config.default_page)
-            )
-        )
-        
-        # Update current page if changed
-        if selected_page != st.session_state.get('current_page'):
-            st.session_state.current_page = selected_page
-            st.rerun()
+        # Add the 5 hierarchical filters here in 5x1 configuration
+        self._render_hierarchical_filters()
         
         st.sidebar.divider()
         
@@ -278,22 +278,34 @@ class DataOverviewDashboard:
         
         st.sidebar.divider()
         
-        # Service Status (new)
-        with st.sidebar.expander("Service Status", expanded=False):
-            services = [
-                ('GCS', 'gcs_service'),
-                ('Rosbag', 'rosbag_service'),
-                ('Analytics', 'analytics_service'),
-                ('Download', 'download_service')
-            ]
-            
-            for name, service_key in services:
-                service = get_service(service_key)
-                if service:
-                    st.success(f"✅ {name}")
-                else:
-                    st.error(f"❌ {name}")
 
+    def _render_hierarchical_filters(self):
+        """Render the 5 hierarchical filters in sidebar"""
+        st.sidebar.subheader("Data Filters")
+        
+        # Get GCS service and data
+        gcs_service = get_service('gcs_service')
+        if not gcs_service:
+            st.sidebar.error("GCS service not available")
+            return
+        
+        gcs_data = gcs_service.get_cached_data()
+        if not gcs_data:
+            st.sidebar.warning("No data available")
+            return
+        
+        from services.data_service import DataService
+        from dashboard.components.filters import HierarchicalFilters
+        
+        try:
+            data_service = DataService(gcs_data)
+            filters = HierarchicalFilters.render_sidebar(data_service)
+            
+            # Store filters in session state for pages to access
+            st.session_state.global_filters = filters
+            
+        except Exception as e:
+            st.sidebar.error(f"Filter error: {e}")
 
 def main():
     """Entry point for the dashboard application"""

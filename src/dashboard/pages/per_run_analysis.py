@@ -42,38 +42,38 @@ def render(gcs_service):
     if not gcs_data:
         st.error("GCS data not available")
         return
+
+    # Get global filters from sidebar
+    filters = st.session_state.get('global_filters', {})
     
-    data_service = DataService(gcs_data)
+    # Check if all required filters are selected
+    if not all([filters.get('client'), filters.get('region'), 
+               filters.get('field'), filters.get('tw'), filters.get('lb')]):
+        st.info("Please select all filter levels in the sidebar")
+        return
     
-    # ========== SECTION 1: RUN SELECTION ==========
-    with st.container():
-        st.subheader("🎯 Select Run for Analysis")
-        
-        # Render hierarchical filters
-        filters = HierarchicalFilters.render(data_service)
-        
-        # Get available timestamps
-        available_timestamps = HierarchicalFilters.get_available_timestamps(filters)
-        
-        if not available_timestamps:
-            st.info("Please select all filter levels to see available runs")
-            return
-        
-        # Timestamp selection with better formatting
-        col1, col2, col3 = st.columns([2, 2, 1])
-        
-        with col1:
-            selected_timestamp = st.selectbox(
-                "Select Timestamp",
-                available_timestamps,
-                format_func=lambda x: _format_timestamp_display(x),
-                help="Select the specific run to analyze"
-            )
-        
-        with col2:
-            st.metric("Available Runs", len(available_timestamps))
-            st.caption(f"For {filters['lb']} in {filters['field']}")
-        
+    # Page-specific options on top-left
+    col1, col2, col3 = st.columns([2, 2, 2])
+    
+    # Get available timestamps from filters
+    available_timestamps = HierarchicalFilters.get_available_timestamps(filters)
+    
+    if not available_timestamps:
+        st.info("No runs available for the selected filters")
+        return
+    
+    with col1:
+        # Timestamp selection
+        selected_timestamp = st.selectbox(
+            "Select Timestamp",
+            available_timestamps,
+            format_func=lambda x: _format_timestamp_display(x),
+            help="Select the specific run to analyze"
+        )
+    
+    with col2:
+        st.metric("Available Runs", len(available_timestamps))
+        st.caption(f"For {filters['lb']} in {filters['field']}")
     
     if not selected_timestamp:
         return

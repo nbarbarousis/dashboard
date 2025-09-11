@@ -34,6 +34,32 @@ def render(gcs_service):
                 st.error(f"Failed to refresh data: {e}")
         return
     
+    # Get global filters from sidebar
+    filters = st.session_state.get('global_filters', {})
+    
+    # Page-specific options on top-left
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    with col1:
+        # Expected samples per bag configuration
+        expected_samples_per_bag = st.number_input(
+            "Expected Samples/Bag",
+            min_value=1,
+            max_value=200,
+            value=17,
+            step=5,
+            help="Expected number of ML samples per raw bag. Adjust to fine-tune gap detection."
+        )
+    
+    # Check if all required filters are selected
+    required_filters = ['client', 'region', 'field', 'tw', 'lb']
+    selected_filters = {k: v for k, v in filters.items() if v is not None}
+    missing_filters = [f for f in required_filters if f not in selected_filters]
+    
+    if missing_filters:
+        st.info(f"Please select all filter levels in the sidebar")
+        return
+    
     # Initialize data service with discovered data
     try:
         data_service = DataService(gcs_data)
@@ -41,44 +67,12 @@ def render(gcs_service):
         st.error(f"Failed to initialize data service: {e}")
         return
     
-    # Block 1: Filters and Configuration
-    with st.container():
-        st.subheader("Data Selection & Configuration")
-        
-        # Create two columns: filters and settings
-        filter_col, settings_col = st.columns([3, 1])
-        
-        with filter_col:
-            # Render hierarchical filters
-            filters = HierarchicalFilters.render(data_service)
-        
-        with settings_col:
-            st.subheader("Settings")
-            # Expected samples per bag configuration
-            expected_samples_per_bag = st.number_input(
-                "Expected Samples/Bag",
-                min_value=1,
-                max_value=200,
-                value=17,
-                step=5,
-                help="Expected number of ML samples per raw bag. Adjust to fine-tune gap detection."
-            )
-        
-        # Check if all required filters are selected
-        required_filters = ['client', 'region', 'field', 'tw', 'lb']
-        selected_filters = {k: v for k, v in filters.items() if v is not None}
-        missing_filters = [f for f in required_filters if f not in selected_filters]
-        
-        if missing_filters:
-            st.info(f"Please select: {', '.join(missing_filters)}")
-            return
-    
     st.divider()
     
     # Block 2: Get data and handle errors
     try:
-        temporal_data = data_service.get_temporal_data(selected_filters, expected_samples_per_bag)
-        coverage_stats = data_service.get_coverage_statistics(selected_filters, expected_samples_per_bag)
+        temporal_data = data_service.get_temporal_data(filters, expected_samples_per_bag)
+        coverage_stats = data_service.get_coverage_statistics(filters, expected_samples_per_bag)
     except ValueError as e:
         st.error(f"Data error: {e}")
         return
@@ -96,7 +90,7 @@ def render(gcs_service):
     # Block 4: Summary statistics and under-labeled detection
     with st.container():
         st.subheader("Coverage Analysis")
-        _render_summary_metrics(temporal_data, coverage_stats, selected_filters)
+        _render_summary_metrics(temporal_data, coverage_stats, filters)
 
 def _render_temporal_plots(data: Dict):
     """Render the temporal coverage plots"""
