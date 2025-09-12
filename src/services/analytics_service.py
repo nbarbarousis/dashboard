@@ -468,6 +468,12 @@ class PlotGenerator:
                              marker_color=color, opacity=0.7),
                 row=2, col=col
             )
+            mean_inst = np.mean([v for v in y_inst if v > 0])
+            fig.add_vline(x=mean_inst, line_dash="dash", line_color="red", row=2, col=col)
+            fig.add_annotation(x=mean_inst, y=0.95, yref='y domain',
+                                text=f'μ={mean_inst:.1f}', showarrow=False,
+                                font=dict(color='red', size=11),
+                                row=2, col=col)
             fig.update_xaxes(title_text="FPS", row=2, col=col)
             fig.update_yaxes(title_text="Count", row=2, col=col)
             
@@ -477,6 +483,12 @@ class PlotGenerator:
                              marker_color=color, opacity=0.7),
                 row=3, col=col
             )
+            mean_roll = np.mean([v for v in y_roll if v > 0])
+            fig.add_vline(x=mean_roll, line_dash="dash", line_color="red", row=3, col=col)
+            fig.add_annotation(x=mean_roll, y=0.95, yref='y domain',
+                                text=f'μ={mean_roll:.1f}', showarrow=False,
+                                font=dict(color='red', size=11),
+                                row=3, col=col)
             fig.update_xaxes(title_text="FPS", row=3, col=col)
             fig.update_yaxes(title_text="Count", row=3, col=col)
         
