@@ -24,25 +24,8 @@ def render(services: ServiceContainer):
     Args:
         services: ServiceContainer instance
     """
-    st.header("Temporal Data Coverage")
-    st.markdown("*Cloud data overview and coverage analysis*")
-    
     # Get global filters from sidebar
     filters = st.session_state.get('global_filters', {})
-    
-    # Page-specific options
-    col1, col2, col3 = st.columns([1, 1, 2])
-    
-    with col1:
-        # Expected samples per bag configuration
-        expected_samples_per_bag = st.number_input(
-            "Expected Samples/Bag",
-            min_value=1,
-            max_value=200,
-            value=17,
-            step=5,
-            help="Expected number of ML samples per raw bag. Adjust to fine-tune gap detection."
-        )
     
     # Check if all required filters are selected
     required_filters = ['cid', 'regionid', 'fieldid', 'twid', 'lbid']
@@ -58,13 +41,11 @@ def render(services: ServiceContainer):
     try:
         # Get temporal data and statistics using the new service
         temporal_data = services.data_state.get_temporal_coverage_data(
-            filters, 
-            expected_samples_per_bag
+            filters
         )
         
         coverage_stats = services.data_state.get_coverage_statistics(
-            filters, 
-            expected_samples_per_bag
+            filters
         )
         
         # Check if we have data
