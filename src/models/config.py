@@ -21,7 +21,6 @@ class DashboardConfig:
     
     # Processing configurations
     expected_samples_per_bag: int = 17
-    cache_refresh_days: int = 7
     
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'DashboardConfig':
