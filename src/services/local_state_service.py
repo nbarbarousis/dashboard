@@ -9,9 +9,10 @@ for individual coordinates.
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 import logging
 
+from src.models import ExtractionDetails, MLExportStatus
 from src.models import RunCoordinate
 from src.models import ExtractionStatus, LocalRawStatus
 
@@ -178,7 +179,7 @@ class LocalStateService:
                 path=None
             )
     
-    def get_extraction_output_info(self, coord: RunCoordinate) -> Dict:
+    def get_extraction_details(self, coord: RunCoordinate) -> ExtractionDetails:
         """
         Get detailed info about extracted files for single coordinate.
         
@@ -186,20 +187,20 @@ class LocalStateService:
             coord: RunCoordinate to check
             
         Returns:
-            Dictionary with detailed extraction information
+            ExtractionDetails with detailed extraction information
         """
         try:
             coord_path = self._build_coordinate_path(self.processed_root, coord)
             
             if not coord_path.exists():
-                return {
-                    "exists": False,
-                    "path": None,
-                    "subdirectories": [],
-                    "total_files": 0,
-                    "total_size": 0,
-                    "file_details": {}
-                }
+                return ExtractionDetails(
+                    exists=False,
+                    path=None,
+                    subdirectories=[],
+                    total_files=0,
+                    total_size=0,
+                    file_details={}
+                )
             
             # Collect information about all files and subdirectories
             subdirectories = []
@@ -226,32 +227,27 @@ class LocalStateService:
                     if relative_path not in subdirectories:
                         subdirectories.append(relative_path)
             
-            return {
-                "exists": True,
-                "path": str(coord_path),
-                "subdirectories": sorted(subdirectories),
-                "total_files": total_files,
-                "total_size": total_size,
-                "file_details": file_details
-            }
+            return ExtractionDetails(
+                exists=True,
+                path=str(coord_path),
+                subdirectories=sorted(subdirectories),
+                total_files=total_files,
+                total_size=total_size,
+                file_details=file_details
+            )
             
         except Exception as e:
-            logger.error(f"Error getting extraction output info for {coord}: {e}")
-            return {
-                "exists": False,
-                "path": None,
-                "subdirectories": [],
-                "total_files": 0,
-                "total_size": 0,
-                "file_details": {},
-                "error": str(e)
-            }
+            logger.error(f"Error getting extraction details for {coord}: {e}")
+            return ExtractionDetails(
+                exists=False,
+                path=None,
+                subdirectories=[],
+                total_files=0,
+                total_size=0,
+                file_details={}
+            )
     
-    # ========================================================================
-    # ML Data Queries
-    # ========================================================================
-    
-    def check_ml_exported(self, coord: RunCoordinate) -> Dict:
+    def check_ml_exported(self, coord: RunCoordinate) -> MLExportStatus:
         """
         Check if ML samples exist in ML/raw export structure.
         
@@ -262,70 +258,67 @@ class LocalStateService:
             coord: RunCoordinate to check
             
         Returns:
-            Dictionary with ML export information
+            MLExportStatus with ML export information
         """
         try:
             # Focus on ML/raw structure (exported annotated samples)
-            # This is where dataset-export puts the annotated samples
             ml_raw_path = self._build_coordinate_path(self.ml_root / "raw", coord)
             
-            results = {
-                "exists": False,
-                "path": None,
-                "file_counts": {},
-                "total_size": 0,
-                "subdirectories": [],
-                "sample_files": []
-            }
-            
             if not ml_raw_path.exists():
-                return results
+                return MLExportStatus(
+                    exists=False,
+                    path=None,
+                    file_counts={},
+                    total_size=0,
+                    subdirectories=[],
+                    sample_files=[]
+                )
             
-            # Check ML/raw structure (exported annotated samples)
-            if ml_raw_path.exists():
-                results["exists"] = True
-                results["path"] = str(ml_raw_path)
-                results["file_counts"] = self._count_files_in_path(ml_raw_path)
-                
-                # Get subdirectories (usually organized by bag or export batch)
-                subdirs = []
-                sample_files = []
-                total_size = 0
-                
-                for item in ml_raw_path.rglob("*"):
-                    if item.is_dir() and item != ml_raw_path:
-                        relative_path = str(item.relative_to(ml_raw_path))
+            # Get file counts and details
+            file_counts = self._count_files_in_path(ml_raw_path)
+            
+            # Get subdirectories and sample files
+            subdirs = []
+            sample_files = []
+            total_size = 0
+            
+            for item in ml_raw_path.rglob("*"):
+                if item.is_dir() and item != ml_raw_path:
+                    relative_path = str(item.relative_to(ml_raw_path))
+                    if relative_path not in subdirs:
                         subdirs.append(relative_path)
-                    elif item.is_file():
-                        try:
-                            file_size = item.stat().st_size
-                            total_size += file_size
-                            relative_path = str(item.relative_to(ml_raw_path))
-                            sample_files.append({
-                                "path": relative_path,
-                                "size": file_size,
-                                "extension": item.suffix.lower() if item.suffix else "no_extension"
-                            })
-                        except OSError:
-                            pass  # Skip files we can't read
-                
-                results["subdirectories"] = sorted(subdirs)
-                results["sample_files"] = sample_files
-                results["total_size"] = total_size
+                elif item.is_file():
+                    try:
+                        file_size = item.stat().st_size
+                        total_size += file_size
+                        relative_path = str(item.relative_to(ml_raw_path))
+                        sample_files.append({
+                            "path": relative_path,
+                            "size": file_size,
+                            "extension": item.suffix.lower() if item.suffix else "no_extension"
+                        })
+                    except OSError:
+                        pass  # Skip files we can't read
             
-            return results
+            return MLExportStatus(
+                exists=True,
+                path=str(ml_raw_path),
+                file_counts=file_counts,
+                total_size=total_size,
+                subdirectories=sorted(subdirs),
+                sample_files=sample_files
+            )
             
         except Exception as e:
             logger.error(f"Error checking ML export for {coord}: {e}")
-            return {
-                "exists": False,
-                "path": None,
-                "file_counts": {},
-                "total_size": 0,
-                "subdirectories": [],
-                "sample_files": [],
-                "error": str(e)
-            }
+            return MLExportStatus(
+                exists=False,
+                path=None,
+                file_counts={},
+                total_size=0,
+                subdirectories=[],
+                sample_files=[]
+            )
     
     def get_export_ids(self) -> List[str]:
         """
