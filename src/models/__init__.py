@@ -4,7 +4,7 @@ from .core import RunCoordinate, DataStatus, ProcessingStatus
 # State models
 from .state import (
     CloudRawStatus, CloudMLStatus, LocalRawStatus, ExtractionStatus,
-    ExtractionDetails, MLExportStatus, ExportInfo, RunState
+    ExtractionDetails, LocalMLStatus, ExportInfo, RunState
 )
 
 # Operation models
@@ -27,7 +27,7 @@ __all__ = [
     'RunCoordinate', 'DataStatus', 'ProcessingStatus',
     # State
     'CloudRawStatus', 'CloudMLStatus', 'LocalRawStatus', 'ExtractionStatus',
-    'ExtractionDetails', 'MLExportStatus', 'ExportInfo', 'RunState',
+    'ExtractionDetails', 'LocalMLStatus', 'ExportInfo', 'RunState',
     # Operations
     'DownloadJob', 'ExtractionJob', 'OperationResult',
     # Data

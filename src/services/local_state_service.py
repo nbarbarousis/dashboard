@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List
 import logging
 
-from src.models import ExtractionDetails, MLExportStatus
+from src.models import ExtractionDetails, LocalMLStatus
 from src.models import RunCoordinate
 from src.models import ExtractionStatus, LocalRawStatus
 
@@ -55,7 +55,7 @@ class LocalStateService:
     # Raw Data Queries (Atomic)
     # ========================================================================
     
-    def check_raw_downloaded(self, coord: RunCoordinate) -> LocalRawStatus:
+    def get_raw_status(self, coord: RunCoordinate) -> LocalRawStatus:
         """
         Check if raw bags are downloaded locally for single coordinate.
         
@@ -247,7 +247,7 @@ class LocalStateService:
                 file_details={}
             )
     
-    def check_ml_exported(self, coord: RunCoordinate) -> MLExportStatus:
+    def get_ml_status(self, coord: RunCoordinate) -> LocalMLStatus:
         """
         Check if ML samples exist in ML/raw export structure.
         
@@ -258,14 +258,14 @@ class LocalStateService:
             coord: RunCoordinate to check
             
         Returns:
-            MLExportStatus with ML export information
+            LocalMLStatus with ML export information
         """
         try:
             # Focus on ML/raw structure (exported annotated samples)
             ml_raw_path = self._build_coordinate_path(self.ml_root / "raw", coord)
             
             if not ml_raw_path.exists():
-                return MLExportStatus(
+                return LocalMLStatus(
                     exists=False,
                     path=None,
                     file_counts={},
@@ -300,7 +300,7 @@ class LocalStateService:
                     except OSError:
                         pass  # Skip files we can't read
             
-            return MLExportStatus(
+            return LocalMLStatus(
                 exists=True,
                 path=str(ml_raw_path),
                 file_counts=file_counts,
@@ -311,7 +311,7 @@ class LocalStateService:
             
         except Exception as e:
             logger.error(f"Error checking ML export for {coord}: {e}")
-            return MLExportStatus(
+            return LocalMLStatus(
                 exists=False,
                 path=None,
                 file_counts={},

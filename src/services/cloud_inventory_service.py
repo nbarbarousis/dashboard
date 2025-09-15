@@ -169,7 +169,7 @@ class CloudInventoryService:
     # Coordinate Queries - ALL return models for consistency
     # ============================================================================
     
-    def get_raw_bags_info(self, coord: RunCoordinate) -> CloudRawStatus:
+    def get_raw_status(self, coord: RunCoordinate) -> CloudRawStatus:
         """
         Get raw bag info for single coordinate from cache.
         
@@ -204,7 +204,7 @@ class CloudInventoryService:
             logger.error(f"Error getting raw bags info for {coord}: {e}")
             return CloudRawStatus(exists=False, bag_count=0, bag_names=[], total_size=0)
     
-    def get_ml_samples_info(self, coord: RunCoordinate) -> CloudMLStatus:
+    def get_ml_status(self, coord: RunCoordinate) -> CloudMLStatus:
         """
         Get ML sample info for single coordinate from cache.
         

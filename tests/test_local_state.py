@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch, mock_open
 
 from src.models import RunCoordinate
-from src.models import ExtractionStatus, LocalRawStatus, ExtractionDetails, MLExportStatus
+from src.models import ExtractionStatus, LocalRawStatus, ExtractionDetails, LocalMLStatus
 from src.services.local_state_service import LocalStateService
 
 # ============================================================================
@@ -106,8 +106,8 @@ class TestRawDataQueries:
     """Test raw data query methods."""
     
     def test_check_raw_downloaded_not_exists(self, local_state_service, sample_coordinate):
-        """Test check_raw_downloaded when coordinate path doesn't exist."""
-        status = local_state_service.check_raw_downloaded(sample_coordinate)
+        """Test get_raw_status when coordinate path doesn't exist."""
+        status = local_state_service.get_raw_status(sample_coordinate)
         
         assert isinstance(status, LocalRawStatus)
         assert status.downloaded is False
@@ -117,12 +117,12 @@ class TestRawDataQueries:
         assert status.path is None
     
     def test_check_raw_downloaded_exists_no_bags(self, local_state_service, sample_coordinate, temp_data_dirs):
-        """Test check_raw_downloaded when path exists but no bag files."""
+        """Test get_raw_status when path exists but no bag files."""
         # Create coordinate directory but no bag files
         coord_path = local_state_service._build_coordinate_path(temp_data_dirs["raw_root"], sample_coordinate)
         coord_path.mkdir(parents=True)
         
-        status = local_state_service.check_raw_downloaded(sample_coordinate)
+        status = local_state_service.get_raw_status(sample_coordinate)
         
         assert status.downloaded is False
         assert status.bag_count == 0
@@ -131,7 +131,7 @@ class TestRawDataQueries:
         assert status.path == str(coord_path)
     
     def test_check_raw_downloaded_with_bags(self, local_state_service, sample_coordinate, temp_data_dirs):
-        """Test check_raw_downloaded with actual bag files."""
+        """Test get_raw_status with actual bag files."""
         # Create coordinate directory with bag files
         coord_path = local_state_service._build_coordinate_path(temp_data_dirs["raw_root"], sample_coordinate)
         coord_path.mkdir(parents=True)
@@ -145,7 +145,7 @@ class TestRawDataQueries:
         bag2.write_bytes(b"0" * 2000)  # 2KB
         bag3.write_bytes(b"0" * 1500)  # 1.5KB
         
-        status = local_state_service.check_raw_downloaded(sample_coordinate)
+        status = local_state_service.get_raw_status(sample_coordinate)
         
         assert status.downloaded is True
         assert status.bag_count == 3
@@ -158,7 +158,7 @@ class TestRawDataQueries:
         assert status.path == str(coord_path)
     
     def test_check_raw_downloaded_with_mixed_files(self, local_state_service, sample_coordinate, temp_data_dirs):
-        """Test check_raw_downloaded with mixed file types (only counts .bag files)."""
+        """Test get_raw_status with mixed file types (only counts .bag files)."""
         coord_path = local_state_service._build_coordinate_path(temp_data_dirs["raw_root"], sample_coordinate)
         coord_path.mkdir(parents=True)
         
@@ -171,7 +171,7 @@ class TestRawDataQueries:
         other_file.write_text("not a bag file")
         another_file.write_text('{"key": "value"}')
         
-        status = local_state_service.check_raw_downloaded(sample_coordinate)
+        status = local_state_service.get_raw_status(sample_coordinate)
         
         assert status.downloaded is True
         assert status.bag_count == 1
@@ -183,7 +183,7 @@ class TestExtractionQueries:
     """Test extraction query methods."""
     
     def test_check_extracted_not_exists(self, local_state_service, sample_coordinate):
-        """Test check_extracted when coordinate path doesn't exist."""
+        """Test get_ml_status when coordinate path doesn't exist."""
         status = local_state_service.check_extracted(sample_coordinate)
         
         assert isinstance(status, ExtractionStatus)
@@ -329,10 +329,10 @@ class TestMLDataQueries:
     """Test ML data query methods."""
     
     def test_check_ml_exported_not_exists(self, local_state_service, sample_coordinate):
-        """Test check_ml_exported when ML/raw path doesn't exist."""
-        status = local_state_service.check_ml_exported(sample_coordinate)
+        """Test get_ml_status when ML/raw path doesn't exist."""
+        status = local_state_service.get_ml_status(sample_coordinate)
         
-        assert isinstance(status, MLExportStatus)
+        assert isinstance(status, LocalMLStatus)
         assert status.exists is False
         assert status.path is None
         assert status.file_counts == {}
@@ -341,7 +341,7 @@ class TestMLDataQueries:
         assert status.sample_files == []
 
     def test_check_ml_exported_with_data(self, local_state_service, sample_coordinate, temp_data_dirs):
-        """Test check_ml_exported with exported samples in ML/raw."""
+        """Test get_ml_status with exported samples in ML/raw."""
         # Create ML/raw coordinate path
         ml_raw_path = local_state_service._build_coordinate_path(temp_data_dirs["ml_root"] / "raw", sample_coordinate)
         ml_raw_path.mkdir(parents=True)
@@ -356,9 +356,9 @@ class TestMLDataQueries:
         (export_dir / "sample_002.jpg").write_bytes(b"0" * 1200)
         (export_dir / "sample_002.json").write_bytes(b"0" * 300)
         
-        status = local_state_service.check_ml_exported(sample_coordinate)
+        status = local_state_service.get_ml_status(sample_coordinate)
         
-        assert isinstance(status, MLExportStatus)
+        assert isinstance(status, LocalMLStatus)
         assert status.exists is True
         assert status.path == str(ml_raw_path)
         assert status.total_size == 2700  # 1000 + 200 + 1200 + 300
@@ -560,7 +560,7 @@ class TestRealFilesystemIntegration:
             )
             
             # Check raw status
-            raw_status = service.check_raw_downloaded(coord)
+            raw_status = service.get_raw_status(coord)
             
             # Should find actual bag files
             if raw_status.downloaded:
@@ -579,9 +579,9 @@ class TestRealFilesystemIntegration:
             assert isinstance(extraction_details, ExtractionDetails)
             
             # Test ML data check
-            ml_status = service.check_ml_exported(coord)
+            ml_status = service.get_ml_status(coord)
             # May or may not exist, but should not raise errors
-            assert isinstance(ml_status, MLExportStatus)
+            assert isinstance(ml_status, LocalMLStatus)
             assert hasattr(ml_status, 'exists')
         else:
             # Skip test if real data doesn't exist
@@ -592,10 +592,10 @@ class TestErrorHandling:
     """Test error handling scenarios."""
     
     def test_check_raw_downloaded_exception_handling(self, local_state_service, sample_coordinate):
-        """Test check_raw_downloaded handles general exceptions."""
+        """Test get_raw_status handles general exceptions."""
         with patch.object(local_state_service, '_build_coordinate_path', side_effect=Exception("Unexpected error")):
             with patch('src.services.local_state_service.logger') as mock_logger:
-                status = local_state_service.check_raw_downloaded(sample_coordinate)
+                status = local_state_service.get_raw_status(sample_coordinate)
                 
                 # Should return safe defaults
                 assert status.downloaded is False

@@ -260,7 +260,7 @@ class TestCoordinateQueries:
         """Test getting raw bag info for existing coordinate."""
         cloud_service.get_full_inventory(force_refresh=True)
         
-        status = cloud_service.get_raw_bags_info(sample_coordinate)
+        status = cloud_service.get_raw_status(sample_coordinate)
         
         assert isinstance(status, CloudRawStatus)
         assert status.exists is True
@@ -278,7 +278,7 @@ class TestCoordinateQueries:
             twid="TW_999", lbid="LB_999", timestamp="2025_01_01T00:00:00Z"
         )
         
-        status = cloud_service.get_raw_bags_info(nonexistent_coord)
+        status = cloud_service.get_raw_status(nonexistent_coord)
         
         assert isinstance(status, CloudRawStatus)
         assert status.exists is False
@@ -290,7 +290,7 @@ class TestCoordinateQueries:
         """Test getting ML sample info for existing coordinate."""
         cloud_service.get_full_inventory(force_refresh=True)
         
-        status = cloud_service.get_ml_samples_info(sample_coordinate)
+        status = cloud_service.get_ml_status(sample_coordinate)
         
         assert isinstance(status, CloudMLStatus)
         assert status.exists is True
@@ -310,7 +310,7 @@ class TestCoordinateQueries:
             twid="TW_999", lbid="LB_999", timestamp="2025_01_01T00:00:00Z"
         )
         
-        status = cloud_service.get_ml_samples_info(nonexistent_coord)
+        status = cloud_service.get_ml_status(nonexistent_coord)
         
         assert isinstance(status, CloudMLStatus)
         assert status.exists is False
@@ -408,7 +408,7 @@ class TestErrorHandling:
     def test_coordinate_query_with_no_cache(self, cloud_service, sample_coordinate):
         """Test coordinate queries when cache is empty."""
         # Don't refresh cache, so it stays empty
-        status = cloud_service.get_raw_bags_info(sample_coordinate)
+        status = cloud_service.get_raw_status(sample_coordinate)
         
         assert isinstance(status, CloudRawStatus)
         assert status.exists is False
@@ -452,7 +452,7 @@ class TestRealDataStructures:
                 twid="TW_001", lbid="LB_0003", timestamp="2025_08_25T09:01:16Z"
             )
             
-            ml_status = service.get_ml_samples_info(coord)
+            ml_status = service.get_ml_status(coord)
             
             assert ml_status.exists is True
             assert ml_status.total_samples == 9  # 3 bags * 3 labels each

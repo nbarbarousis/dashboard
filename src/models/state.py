@@ -50,7 +50,7 @@ class ExtractionDetails:
 
 
 @dataclass
-class MLExportStatus:
+class LocalMLStatus:
     """Local ML export status for a coordinate."""
     exists: bool
     path: Optional[str]
