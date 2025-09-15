@@ -97,7 +97,7 @@ class ServiceContainer:
             if not inventory:
                 logger.warning("No cloud inventory data available")
             else:
-                logger.info(f"Cloud inventory loaded with {len(inventory)} buckets")
+                logger.info("Cloud inventory loaded")
             
             # Future: warm up other services as needed
             

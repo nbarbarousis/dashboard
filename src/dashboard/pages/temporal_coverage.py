@@ -108,10 +108,10 @@ def _render_temporal_plots(data: TemporalData):
         subplot_titles=[
             "Raw Data Coverage (Bags per Timestamp)",
             "ML Data Coverage (Samples per Timestamp)",
-            "Annotation Gaps (% Unannotated per Timestamp)"
+            "Annotation Coverage (% Annotated per Timestamp)"
         ],
         shared_xaxes=True,
-        vertical_spacing=0.08
+        vertical_spacing=0.12  # Increased margin
     )
     
     # Plot 1: Raw bags
@@ -134,21 +134,21 @@ def _render_temporal_plots(data: TemporalData):
         marker=dict(size=8)
     ), row=2, col=1)
     
-    # Plot 3: Gap analysis
+    # Plot 3: Coverage analysis
     fig.add_trace(go.Scatter(
         x=display_timestamps,
-        y=data.gap_percentages,
+        y=data.coverage_percentages,  
         mode='markers+lines',
-        name='Coverage Gap %',
-        line=dict(color='#d62728', width=3),
+        name='Coverage %',
+        line=dict(color='#2ca02c', width=3),  # Green for positive metric
         marker=dict(size=8),
-        fill='tonexty' if len(data.gap_percentages) > 0 else None,
-        fillcolor='rgba(214, 39, 40, 0.2)'
+        fill='tonexty' if len(data.coverage_percentages) > 0 else None,
+        fillcolor='rgba(44, 160, 44, 0.2)'
     ), row=3, col=1)
     
-    # Update layout
+    # Update layout with increased height for better spacing
     fig.update_layout(
-        height=700,
+        height=750,  # Increased for better spacing
         showlegend=False,
         title_text="Data Coverage Over Time"
     )
@@ -156,7 +156,7 @@ def _render_temporal_plots(data: TemporalData):
     # Update y-axis labels
     fig.update_yaxes(title_text="Bag Count", row=1, col=1)
     fig.update_yaxes(title_text="Sample Count", row=2, col=1)
-    fig.update_yaxes(title_text="Gap %", row=3, col=1)
+    fig.update_yaxes(title_text="Coverage %", row=3, col=1)
     fig.update_xaxes(title_text="Timestamps", row=3, col=1)
     
     st.plotly_chart(fig, use_container_width=True)
@@ -193,7 +193,9 @@ def _render_summary_metrics(data: TemporalData, stats: CoverageStatistics, filte
         st.metric("Expected Samples", f"{expected_total:,}")
     
     with col2:
-        st.metric("Avg Gap", f"{stats.average_gap_pct:.1f}%")
+        # Show average coverage
+        avg_coverage = 100 - stats.average_gap_pct
+        st.metric("Avg Coverage", f"{avg_coverage:.1f}%")
     
     with col3:
         st.metric("Samples/Bag", f"{data.expected_samples_per_bag}")
@@ -207,11 +209,12 @@ def _render_summary_metrics(data: TemporalData, stats: CoverageStatistics, filte
         f"{filters['fieldid']} → {filters['twid']} → {filters['lbid']}"
     )
     
-    # If there are under-labeled timestamps, show them
+    # Display worst coverage timestamps (already sorted by service)
     if stats.under_labeled_timestamps:
-        with st.expander(f"Under-labeled Timestamps ({stats.under_labeled_count})"):
+        with st.expander(f"Worst Coverage Timestamps ({stats.under_labeled_count})"):
             for ts, gap, raw, ml in stats.under_labeled_timestamps[:10]:  # Show first 10
-                st.text(f"{_format_timestamp(ts)}: {gap:.1f}% gap ({raw} bags, {ml} samples)")
+                coverage = 100 - gap
+                st.text(f"{_format_timestamp(ts)}: {coverage:.1f}% coverage ({raw} bags, {ml} samples)")
             if stats.under_labeled_count > 10:
                 st.text(f"... and {stats.under_labeled_count - 10} more")
 

@@ -7,7 +7,7 @@ class TemporalData:
     timestamps: List[str]
     raw_bags: List[int]
     ml_samples: List[int]
-    gap_percentages: List[float]
+    coverage_percentages: List[float]
     expected_samples_per_bag: int
 
 

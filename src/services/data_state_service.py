@@ -36,7 +36,7 @@ class DataStateService:
         
         This method:
         1. Gets timeline data from cloud cache
-        2. Calculates gap percentages
+        2. Calculates coverage percentages (not gaps)
         3. Returns structured data for plotting
         
         Args:
@@ -55,7 +55,7 @@ class DataStateService:
                     timestamps=[],
                     raw_bags=[],
                     ml_samples=[],
-                    gap_percentages=[],
+                    coverage_percentages=[],
                     expected_samples_per_bag=expected_samples_per_bag
                 )
             
@@ -67,12 +67,12 @@ class DataStateService:
                     timestamps=[],
                     raw_bags=[],
                     ml_samples=[],
-                    gap_percentages=[],
+                    coverage_percentages=[],
                     expected_samples_per_bag=expected_samples_per_bag
                 )
             
-            # Calculate gap percentages
-            gap_percentages = []
+            # Calculate coverage percentages (100 - gap)
+            coverage_percentages = []
             for timestamp in timeline.timestamps:
                 raw_count = timeline.raw_counts.get(timestamp, 0)
                 ml_count = timeline.ml_counts.get(timestamp, 0)
@@ -81,9 +81,11 @@ class DataStateService:
                     expected = raw_count * expected_samples_per_bag
                     actual = ml_count
                     gap_pct = ((expected - actual) / expected) * 100 if expected > 0 else 0
-                    gap_percentages.append(max(0, gap_pct))  # Never negative
+                    gap_pct = max(0, gap_pct)  # Never negative
+                    coverage_pct = 100 - gap_pct  # Convert to coverage
+                    coverage_percentages.append(coverage_pct)
                 else:
-                    gap_percentages.append(0)  # No gap if no raw data
+                    coverage_percentages.append(100)  # 100% coverage if no raw data expected
             
             # Build lists in correct order
             raw_bags = [timeline.raw_counts.get(ts, 0) for ts in timeline.timestamps]
@@ -93,7 +95,7 @@ class DataStateService:
                 timestamps=timeline.timestamps,
                 raw_bags=raw_bags,
                 ml_samples=ml_samples,
-                gap_percentages=gap_percentages,
+                coverage_percentages=coverage_percentages,  # Now contains coverage percentages
                 expected_samples_per_bag=expected_samples_per_bag
             )
             
@@ -104,10 +106,10 @@ class DataStateService:
                 timestamps=[],
                 raw_bags=[],
                 ml_samples=[],
-                gap_percentages=[],
+                coverage_percentages=[],
                 expected_samples_per_bag=expected_samples_per_bag
             )
-    
+
     def get_coverage_statistics(self, filters: Dict, expected_samples_per_bag: int = 17) -> CoverageStatistics:
         """
         Get detailed coverage statistics for summary display.
@@ -142,20 +144,25 @@ class DataStateService:
             total_expected = total_raw * expected_samples_per_bag
             overall_coverage = (total_ml / total_expected * 100) if total_expected > 0 else 0
             
-            # Average gap
-            avg_gap = sum(temporal_data.gap_percentages) / len(temporal_data.gap_percentages) if temporal_data.gap_percentages else 0
+            # Average coverage (temporal_data.coverage_percentages now contains coverage)
+            avg_coverage = sum(temporal_data.coverage_percentages) / len(temporal_data.coverage_percentages) if temporal_data.coverage_percentages else 0
+            avg_gap = 100 - avg_coverage  # Convert back to gap for stats model
             
-            # Find under-labeled timestamps (>20% gap)
+            # Find under-labeled timestamps (<80% coverage)
             under_labeled = []
             for i, timestamp in enumerate(temporal_data.timestamps):
-                gap = temporal_data.gap_percentages[i]
-                if gap > 20:  # More than 20% gap
+                coverage = temporal_data.coverage_percentages[i]  # This is now coverage
+                if coverage < 80:  # Less than 80% coverage
+                    gap = 100 - coverage  # Convert to gap for storage
                     under_labeled.append((
                         timestamp,
                         gap,
                         temporal_data.raw_bags[i],
                         temporal_data.ml_samples[i]
                     ))
+            
+            # Sort by coverage (worst first) - convert gap back to coverage for sorting
+            under_labeled.sort(key=lambda x: 100 - x[1])  # Sort by coverage ascending
             
             return CoverageStatistics(
                 total_timestamps=len(temporal_data.timestamps),

@@ -170,7 +170,7 @@ class HierarchicalFilters:
             st.sidebar.selectbox("TW", ["Select field first"], disabled=True)
             return selected_filters
         
-        # 5. Laser Box Filter
+        # 5. Laser Box Filter (with "All" option)
         if selected_filters['twid']:
             lb_options = data_state_service.get_filter_options(
                 'lbid',
@@ -183,22 +183,30 @@ class HierarchicalFilters:
             )
             
             if lb_options:
+                # Add "All" option for laser box
+                lb_display_options = ["All"] + lb_options
+                
                 lb_idx = 0
                 if current_filters.get('lbid') in lb_options:
-                    lb_idx = lb_options.index(current_filters['lbid'])
+                    lb_idx = lb_display_options.index(current_filters['lbid'])
+                elif current_filters.get('lbid') is None:
+                    lb_idx = 0  # Select "All" if None
                 
-                selected_lbid = st.sidebar.selectbox(
+                selected_lb = st.sidebar.selectbox(
                     "Laser Box",
-                    lb_options,
+                    lb_display_options,
                     index=lb_idx,
                     key="sidebar_filter_lbid"
                 )
                 
-                if selected_lbid != current_filters.get('lbid'):
-                    update_filter('lbid', selected_lbid)
+                # Convert "All" to None
+                lb_value = None if selected_lb == "All" else selected_lb
+                
+                if lb_value != current_filters.get('lbid'):
+                    update_filter('lbid', lb_value)
                     st.rerun()
                 
-                selected_filters['lbid'] = selected_lbid
+                selected_filters['lbid'] = lb_value
             else:
                 st.sidebar.selectbox("Laser Box", ["No data"], disabled=True)
                 return selected_filters
