@@ -5,8 +5,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 import plotly.graph_objects as go
 
-from src.models import DataStatus, ProcessingStatus, RunCoordinate
-from src.models import ExtractedData
+from .core import DataStatus, ProcessingStatus, RunCoordinate
+from .data_containers import ExtractedData
 
 @dataclass
 class AnalysisMetrics:

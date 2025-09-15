@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from src.models import DataStatus, RunCoordinate
+from .core import DataStatus, RunCoordinate
 
 @dataclass
 class CloudRawStatus:
