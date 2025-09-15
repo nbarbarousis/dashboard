@@ -17,7 +17,7 @@ from .data_containers import ExtractedData
 from .analysis import AnalysisMetrics, AnalysisPlots, RunAnalysis
 
 # Page models
-from .pages import TemporalData, CoverageStatistics, TimelineData
+from .pages import TemporalData, CoverageStatistics, TimelineData, LaserBoxStats, AggregatedTemporalData
 
 # Config models
 from .config import DashboardConfig, CacheInfo

@@ -7,6 +7,7 @@ This implementation focuses on Page 1 (Temporal Coverage) functionality.
 import logging
 from typing import Dict, List, Optional
 
+from src.models import AggregatedTemporalData, LaserBoxStats
 from src.models import RunCoordinate
 from src.models import TemporalData, CoverageStatistics, TimelineData
 from src.services.cloud_inventory_service import CloudInventoryService
@@ -185,6 +186,167 @@ class DataStateService:
                 under_labeled_count=0,
                 under_labeled_timestamps=[]
             )
+
+
+    def get_temporal_coverage_aggregated(self, filters: Dict, expected_samples_per_bag: int = 17) -> AggregatedTemporalData:
+        """
+        Get aggregated temporal coverage data when LB = 'All'.
+        
+        Groups data by date across all laser boxes for the given filters.
+        Only includes dates where at least one LB has data.
+        
+        Args:
+            filters: Filter selection (should have lbid=None for aggregated view)
+            expected_samples_per_bag: Expected ML samples per raw bag
+            
+        Returns:
+            AggregatedTemporalData model ready for plotting
+        """
+        try:
+            # Get data for all laser boxes
+            lb_options = self.get_filter_options(
+                'lbid',
+                parent_filters={k: v for k, v in filters.items() if k != 'lbid'}
+            )
+            
+            if not lb_options:
+                return AggregatedTemporalData(
+                    dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
+                    lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
+                )
+            
+            # Collect data from all laser boxes
+            all_data = {}  # date -> {lb -> {bags: int, samples: int}}
+            
+            for lb_id in lb_options:
+                lb_filters = {**filters, 'lbid': lb_id}
+                timeline = self.cloud.get_temporal_timeline(lb_filters)
+                
+                for timestamp in timeline.timestamps:
+                    # Extract date from timestamp
+                    try:
+                        date = timestamp.split('T')[0]  # Get YYYY-MM-DD part
+                    except:
+                        date = timestamp  # Fallback
+                    
+                    if date not in all_data:
+                        all_data[date] = {}
+                    
+                    if lb_id not in all_data[date]:
+                        all_data[date][lb_id] = {'bags': 0, 'samples': 0}
+                    
+                    all_data[date][lb_id]['bags'] += timeline.raw_counts.get(timestamp, 0)
+                    all_data[date][lb_id]['samples'] += timeline.ml_counts.get(timestamp, 0)
+            
+            if not all_data:
+                return AggregatedTemporalData(
+                    dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
+                    lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
+                )
+            
+            # Sort dates and aggregate
+            sorted_dates = sorted(all_data.keys())
+            daily_bags = []
+            daily_samples = []
+            coverage_percentages = []
+            
+            for date in sorted_dates:
+                total_bags = sum(lb_data['bags'] for lb_data in all_data[date].values())
+                total_samples = sum(lb_data['samples'] for lb_data in all_data[date].values())
+                
+                daily_bags.append(total_bags)
+                daily_samples.append(total_samples)
+                
+                # Calculate coverage for this date
+                if total_bags > 0:
+                    expected = total_bags * expected_samples_per_bag
+                    coverage = (total_samples / expected * 100) if expected > 0 else 100
+                    coverage_percentages.append(min(100, coverage))
+                else:
+                    coverage_percentages.append(100)
+            
+            # Get all contributing LBs
+            contributing_lbs = list(set(
+                lb_id for date_data in all_data.values() 
+                for lb_id in date_data.keys()
+            ))
+            
+            return AggregatedTemporalData(
+                dates=sorted_dates,
+                raw_bags=daily_bags,
+                ml_samples=daily_samples,
+                coverage_percentages=coverage_percentages,
+                lb_breakdown=all_data,
+                contributing_lbs=sorted(contributing_lbs),
+                expected_samples_per_bag=expected_samples_per_bag
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting aggregated temporal coverage data: {e}")
+            return AggregatedTemporalData(
+                dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
+                lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
+            )
+
+    def get_laser_box_statistics(self, filters: Dict, expected_samples_per_bag: int = 17) -> List[LaserBoxStats]:
+        """
+        Get per-laser box statistics for breakdown table.
+        
+        Args:
+            filters: Filter selection (should have lbid=None for aggregated view)
+            expected_samples_per_bag: Expected ML samples per raw bag
+            
+        Returns:
+            List of LaserBoxStats sorted by total bags descending
+        """
+        try:
+            # Get aggregated data first
+            agg_data = self.get_temporal_coverage_aggregated(filters, expected_samples_per_bag)
+            
+            if not agg_data.contributing_lbs:
+                return []
+            
+            lb_stats = []
+            
+            for lb_id in agg_data.contributing_lbs:
+                total_bags = 0
+                total_samples = 0
+                active_days = 0
+                
+                # Sum across all dates for this LB
+                for date in agg_data.dates:
+                    if lb_id in agg_data.lb_breakdown.get(date, {}):
+                        lb_data = agg_data.lb_breakdown[date][lb_id]
+                        total_bags += lb_data['bags']
+                        total_samples += lb_data['samples']
+                        if lb_data['bags'] > 0:  # Count as active day if has bags
+                            active_days += 1
+                
+                # Calculate metrics
+                coverage_pct = 0
+                if total_bags > 0:
+                    expected = total_bags * expected_samples_per_bag
+                    coverage_pct = (total_samples / expected * 100) if expected > 0 else 0
+                
+                avg_bags_per_day = total_bags / active_days if active_days > 0 else 0
+                avg_samples_per_day = total_samples / active_days if active_days > 0 else 0
+                
+                lb_stats.append(LaserBoxStats(
+                    lb_id=lb_id,
+                    total_bags=total_bags,
+                    total_samples=total_samples,
+                    coverage_pct=coverage_pct,
+                    active_days=active_days,
+                    avg_bags_per_day=avg_bags_per_day,
+                    avg_samples_per_day=avg_samples_per_day
+                ))
+            
+            # Sort by total bags descending
+            return sorted(lb_stats, key=lambda x: x.total_bags, reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error getting laser box statistics: {e}")
+            return []
     
     def get_filter_options(self, level: str, parent_filters: Optional[Dict] = None) -> List[str]:
         """
