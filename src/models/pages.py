@@ -8,7 +8,6 @@ class TemporalData:
     raw_bags: List[int]
     ml_samples: List[int]
     coverage_percentages: List[float]
-    expected_samples_per_bag: int
 
 @dataclass
 class AggregatedTemporalData:
@@ -19,7 +18,6 @@ class AggregatedTemporalData:
     coverage_percentages: List[float]  # Coverage per date
     lb_breakdown: Dict[str, Dict[str, int]]  # date -> {lb -> {bags: int, samples: int}}
     contributing_lbs: List[str]  # All LBs that contributed data
-    expected_samples_per_bag: int
 
 @dataclass
 class LaserBoxStats:
@@ -39,7 +37,6 @@ class CoverageStatistics:
     total_raw_bags: int
     total_ml_samples: int
     overall_coverage_pct: float
-    average_gap_pct: float
     under_labeled_count: int
     under_labeled_timestamps: List[Tuple[str, float, int, int]]
 

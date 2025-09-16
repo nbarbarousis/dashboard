@@ -114,9 +114,9 @@ def _render_aggregated_plots(data: AggregatedTemporalData):
     fig = make_subplots(
         rows=3, cols=1,
         subplot_titles=[
-            "Daily Raw Data Coverage (Total Bags per Day)",
-            "Daily ML Data Coverage (Total Samples per Day)", 
-            "Daily Annotation Coverage (% Coverage per Day)"
+            "Raw Data Coverage (Total Bags per Active Day)",
+            "ML Data Coverage (Total Samples per Active Day)", 
+            "Annotation Coverage (% Coverage per Active Day)"
         ],
         shared_xaxes=True,
         vertical_spacing=0.12
@@ -177,10 +177,6 @@ def _render_aggregated_summary(data: AggregatedTemporalData, filters: Dict):
     total_bags = sum(data.raw_bags)
     total_samples = sum(data.ml_samples)
     
-    # Overall coverage
-    expected_total = total_bags * data.expected_samples_per_bag
-    overall_coverage = (total_samples / expected_total * 100) if expected_total > 0 else 0
-    
     # Average daily coverage
     avg_coverage = sum(data.coverage_percentages) / len(data.coverage_percentages) if data.coverage_percentages else 0
     
@@ -197,7 +193,7 @@ def _render_aggregated_summary(data: AggregatedTemporalData, filters: Dict):
         st.metric("Total Samples", f"{total_samples:,}")
     
     with col4:
-        st.metric("Overall Coverage", f"{overall_coverage:.1f}%")
+        st.metric("Avg Daily Coverage", f"{avg_coverage:.1f}%")
     
     # Second row
     col1, col2, col3, col4 = st.columns(4)
@@ -213,8 +209,6 @@ def _render_aggregated_summary(data: AggregatedTemporalData, filters: Dict):
         avg_samples_per_day = total_samples / total_days if total_days > 0 else 0
         st.metric("Avg Samples/Day", f"{avg_samples_per_day:.1f}")
     
-    with col4:
-        st.metric("Avg Daily Coverage", f"{avg_coverage:.1f}%")
     
     # Show current selection context
     st.caption(
@@ -241,33 +235,34 @@ def _render_laser_box_breakdown(lb_stats: List[LaserBoxStats], agg_data: Aggrega
     fig = make_subplots(
         rows=1, cols=3,
         subplot_titles=[
+            "Active Days per Laser Box",
             "Total Bags per Laser Box",
             "Total Samples per Laser Box",
-            "Active Days per Laser Box"
         ],
         horizontal_spacing=0.1
     )
 
-    # Bar 1: total bags
-    fig.add_trace(go.Bar(
-        x=lb_names, y=bag_counts,
-        marker_color='#1f77b4',
-        text=bag_counts, textposition='outside'
-    ), row=1, col=1)
-
-    # Bar 2: total samples
-    fig.add_trace(go.Bar(
-        x=lb_names, y=sample_counts,
-        marker_color='#ff7f0e',
-        text=sample_counts, textposition='outside'
-    ), row=1, col=2)
-
-    # Bar 3: active days
+    # Bar 1: active days
     fig.add_trace(go.Bar(
         x=lb_names, y=active_days,
         marker_color='#2ca02c',
         text=active_days, textposition='outside'
+    ), row=1, col=1)
+
+    # Bar 2: total bags
+    fig.add_trace(go.Bar(
+        x=lb_names, y=bag_counts,
+        marker_color='#1f77b4',
+        text=bag_counts, textposition='outside'
+    ), row=1, col=2)
+
+    # Bar 3: total samples
+    fig.add_trace(go.Bar(
+        x=lb_names, y=sample_counts,
+        marker_color='#ff7f0e',
+        text=sample_counts, textposition='outside'
     ), row=1, col=3)
+
 
     fig.update_layout(
         height=500,
@@ -276,9 +271,9 @@ def _render_laser_box_breakdown(lb_stats: List[LaserBoxStats], agg_data: Aggrega
     )
 
     # Y-axis titles
-    fig.update_yaxes(title_text="Count", row=1, col=1)
+    fig.update_yaxes(title_text="Days", row=1, col=1)
     fig.update_yaxes(title_text="Count", row=1, col=2)
-    fig.update_yaxes(title_text="Days",  row=1, col=3)
+    fig.update_yaxes(title_text="Count",  row=1, col=3)
 
     # X-axis titles
     for c in (1, 2, 3):
@@ -352,6 +347,8 @@ def _render_temporal_plots(data: TemporalData):
     )
 
     fig.update_annotations(font=dict(size=20,weight=400, color="#000"))
+
+    fig.update_yaxes(range=[0, 105], row=3)
     
     # Update y-axis labels
     fig.update_yaxes(title_text="Bag Count", row=1, col=1)
@@ -382,25 +379,19 @@ def _render_summary_metrics(data: TemporalData, stats: CoverageStatistics, filte
         st.metric(
             "Overall Coverage", 
             f"{stats.overall_coverage_pct:.1f}%",
-            delta=f"{stats.overall_coverage_pct - 100:.1f}%" if stats.overall_coverage_pct < 100 else None
-        )
+            )
     
     # Second row with more detailed metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        expected_total = stats.total_raw_bags * data.expected_samples_per_bag
-        st.metric("Expected Samples", f"{expected_total:,}")
+        st.metric("Average Bags/Run", f"{(stats.total_raw_bags / stats.total_timestamps):.1f}" if stats.total_timestamps > 0 else "0")
     
     with col2:
-        # Show average coverage
-        avg_coverage = 100 - stats.average_gap_pct
-        st.metric("Avg Coverage", f"{avg_coverage:.1f}%")
+        st.metric("Average Samples/Run", f"{(stats.total_ml_samples / stats.total_timestamps):.1f}" if stats.total_timestamps > 0 else "0")
+    
     
     with col3:
-        st.metric("Samples/Bag", f"{data.expected_samples_per_bag}")
-    
-    with col4:
         st.metric("Under-labeled Runs", f"{stats.under_labeled_count}")
     
     # Show current selection context

@@ -5,6 +5,7 @@ This implementation focuses on Page 1 (Temporal Coverage) functionality.
 """
 
 import logging
+import math
 from typing import Dict, List, Optional
 
 from src.models import AggregatedTemporalData, LaserBoxStats
@@ -31,7 +32,7 @@ class DataStateService:
     # Page 1: Temporal Coverage Support
     # ========================================================================
     
-    def get_temporal_coverage_data(self, filters: Dict, expected_samples_per_bag: int = 17) -> TemporalData:
+    def get_temporal_coverage_data(self, filters: Dict) -> TemporalData:
         """
         Get temporal coverage data for plotting.
         
@@ -57,7 +58,6 @@ class DataStateService:
                     raw_bags=[],
                     ml_samples=[],
                     coverage_percentages=[],
-                    expected_samples_per_bag=expected_samples_per_bag
                 )
             
             # Get raw timeline from cloud service
@@ -69,7 +69,6 @@ class DataStateService:
                     raw_bags=[],
                     ml_samples=[],
                     coverage_percentages=[],
-                    expected_samples_per_bag=expected_samples_per_bag
                 )
             
             # Calculate coverage percentages (100 - gap)
@@ -78,15 +77,9 @@ class DataStateService:
                 raw_count = timeline.raw_counts.get(timestamp, 0)
                 ml_count = timeline.ml_counts.get(timestamp, 0)
                 
-                if raw_count > 0:
-                    expected = raw_count * expected_samples_per_bag
-                    actual = ml_count
-                    gap_pct = ((expected - actual) / expected) * 100 if expected > 0 else 0
-                    gap_pct = max(0, gap_pct)  # Never negative
-                    coverage_pct = 100 - gap_pct  # Convert to coverage
-                    coverage_percentages.append(coverage_pct)
-                else:
-                    coverage_percentages.append(100)  # 100% coverage if no raw data expected
+                coverage_percentages.append(
+                    self._calculate_coverage(ml_count, raw_count)
+                )
             
             # Build lists in correct order
             raw_bags = [timeline.raw_counts.get(ts, 0) for ts in timeline.timestamps]
@@ -97,7 +90,6 @@ class DataStateService:
                 raw_bags=raw_bags,
                 ml_samples=ml_samples,
                 coverage_percentages=coverage_percentages,  # Now contains coverage percentages
-                expected_samples_per_bag=expected_samples_per_bag
             )
             
         except Exception as e:
@@ -108,10 +100,9 @@ class DataStateService:
                 raw_bags=[],
                 ml_samples=[],
                 coverage_percentages=[],
-                expected_samples_per_bag=expected_samples_per_bag
             )
 
-    def get_coverage_statistics(self, filters: Dict, expected_samples_per_bag: int = 17) -> CoverageStatistics:
+    def get_coverage_statistics(self, filters: Dict) -> CoverageStatistics:
         """
         Get detailed coverage statistics for summary display.
         
@@ -124,7 +115,7 @@ class DataStateService:
         """
         try:
             # Get temporal data first
-            temporal_data = self.get_temporal_coverage_data(filters, expected_samples_per_bag)
+            temporal_data = self.get_temporal_coverage_data(filters)
             
             if not temporal_data.timestamps:
                 return CoverageStatistics(
@@ -132,7 +123,6 @@ class DataStateService:
                     total_raw_bags=0,
                     total_ml_samples=0,
                     overall_coverage_pct=0.0,
-                    average_gap_pct=0.0,
                     under_labeled_count=0,
                     under_labeled_timestamps=[]
                 )
@@ -141,19 +131,13 @@ class DataStateService:
             total_raw = sum(temporal_data.raw_bags)
             total_ml = sum(temporal_data.ml_samples)
             
-            # Overall coverage
-            total_expected = total_raw * expected_samples_per_bag
-            overall_coverage = (total_ml / total_expected * 100) if total_expected > 0 else 0
+            overall_coverage = self._calculate_coverage(total_ml, total_raw)
             
-            # Average coverage (temporal_data.coverage_percentages now contains coverage)
-            avg_coverage = sum(temporal_data.coverage_percentages) / len(temporal_data.coverage_percentages) if temporal_data.coverage_percentages else 0
-            avg_gap = 100 - avg_coverage  # Convert back to gap for stats model
-            
-            # Find under-labeled timestamps (<80% coverage)
+            # Find under-labeled timestamps (<70% coverage)
             under_labeled = []
             for i, timestamp in enumerate(temporal_data.timestamps):
                 coverage = temporal_data.coverage_percentages[i]  # This is now coverage
-                if coverage < 80:  # Less than 80% coverage
+                if coverage < 70:  # Less than 70% coverage
                     gap = 100 - coverage  # Convert to gap for storage
                     under_labeled.append((
                         timestamp,
@@ -170,7 +154,6 @@ class DataStateService:
                 total_raw_bags=total_raw,
                 total_ml_samples=total_ml,
                 overall_coverage_pct=overall_coverage,
-                average_gap_pct=avg_gap,
                 under_labeled_count=len(under_labeled),
                 under_labeled_timestamps=under_labeled
             )
@@ -182,13 +165,12 @@ class DataStateService:
                 total_raw_bags=0,
                 total_ml_samples=0,
                 overall_coverage_pct=0.0,
-                average_gap_pct=0.0,
                 under_labeled_count=0,
                 under_labeled_timestamps=[]
             )
 
 
-    def get_temporal_coverage_aggregated(self, filters: Dict, expected_samples_per_bag: int = 17) -> AggregatedTemporalData:
+    def get_temporal_coverage_aggregated(self, filters: Dict) -> AggregatedTemporalData:
         """
         Get aggregated temporal coverage data when LB = 'All'.
         
@@ -212,8 +194,7 @@ class DataStateService:
             if not lb_options:
                 return AggregatedTemporalData(
                     dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
-                    lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
-                )
+                    lb_breakdown={}, contributing_lbs=[])
             
             # Collect data from all laser boxes
             all_data = {}  # date -> {lb -> {bags: int, samples: int}}
@@ -241,8 +222,7 @@ class DataStateService:
             if not all_data:
                 return AggregatedTemporalData(
                     dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
-                    lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
-                )
+                    lb_breakdown={}, contributing_lbs=[])
             
             # Sort dates and aggregate
             sorted_dates = sorted(all_data.keys())
@@ -258,12 +238,9 @@ class DataStateService:
                 daily_samples.append(total_samples)
                 
                 # Calculate coverage for this date
-                if total_bags > 0:
-                    expected = total_bags * expected_samples_per_bag
-                    coverage = (total_samples / expected * 100) if expected > 0 else 100
-                    coverage_percentages.append(min(100, coverage))
-                else:
-                    coverage_percentages.append(100)
+                coverage_percentages.append(
+                    self._calculate_coverage(total_samples, total_bags)
+                )
             
             # Get all contributing LBs
             contributing_lbs = list(set(
@@ -278,30 +255,28 @@ class DataStateService:
                 coverage_percentages=coverage_percentages,
                 lb_breakdown=all_data,
                 contributing_lbs=sorted(contributing_lbs),
-                expected_samples_per_bag=expected_samples_per_bag
             )
             
         except Exception as e:
             logger.error(f"Error getting aggregated temporal coverage data: {e}")
             return AggregatedTemporalData(
                 dates=[], raw_bags=[], ml_samples=[], coverage_percentages=[],
-                lb_breakdown={}, contributing_lbs=[], expected_samples_per_bag=expected_samples_per_bag
+                lb_breakdown={}, contributing_lbs=[]
             )
 
-    def get_laser_box_statistics(self, filters: Dict, expected_samples_per_bag: int = 17) -> List[LaserBoxStats]:
+    def get_laser_box_statistics(self, filters: Dict) -> List[LaserBoxStats]:
         """
         Get per-laser box statistics for breakdown table.
         
         Args:
             filters: Filter selection (should have lbid=None for aggregated view)
-            expected_samples_per_bag: Expected ML samples per raw bag
             
         Returns:
             List of LaserBoxStats sorted by total bags descending
         """
         try:
             # Get aggregated data first
-            agg_data = self.get_temporal_coverage_aggregated(filters, expected_samples_per_bag)
+            agg_data = self.get_temporal_coverage_aggregated(filters)
             
             if not agg_data.contributing_lbs:
                 return []
@@ -323,10 +298,7 @@ class DataStateService:
                             active_days += 1
                 
                 # Calculate metrics
-                coverage_pct = 0
-                if total_bags > 0:
-                    expected = total_bags * expected_samples_per_bag
-                    coverage_pct = (total_samples / expected * 100) if expected > 0 else 0
+                coverage_pct = self._calculate_coverage(total_samples, total_bags)
                 
                 avg_bags_per_day = total_bags / active_days if active_days > 0 else 0
                 avg_samples_per_day = total_samples / active_days if active_days > 0 else 0
@@ -407,3 +379,32 @@ class DataStateService:
         except Exception as e:
             logger.error(f"Error getting hierarchy for filters: {e}")
             return {}
+        
+    def _calculate_coverage(self, actual_ml: int, raw_bags: int, expected_samples_per_bag: Optional[int] = 18) -> float:
+        """Calculate coverage using improved method with hard ceiling."""
+        if raw_bags == 0:
+            return 100.0
+        
+        expected_samples = raw_bags * expected_samples_per_bag
+        if expected_samples == 0:
+            return 100.0
+        
+        ratio = actual_ml / expected_samples  # Don't cap here
+        
+        # Use "capped" method - makes 100% nearly impossible!
+        method = "capped"
+        
+        if method == "capped":
+            # Power method up to 85%, then heavy diminishing returns, max 95%
+            if ratio <= 0.85:
+                return math.pow(ratio, 0.7) * 100.0
+            else:
+                base_coverage = math.pow(0.85, 0.7) * 100.0  # ~91%
+                remaining = 95.0 - base_coverage  # ~4% headroom
+                excess_ratio = ratio - 0.85
+                diminished = math.sqrt(excess_ratio / 0.5) if excess_ratio < 0.5 else 1.0
+                return base_coverage + (remaining * diminished)
+        else:
+            # Fallback to power method
+            ratio = min(ratio, 1.0)
+            return math.pow(ratio, 0.7) * 100.0
