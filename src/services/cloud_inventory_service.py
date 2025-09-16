@@ -186,23 +186,45 @@ class CloudInventoryService:
             path_data = self._navigate_to_coordinate(inventory['raw'], coord)
             
             if path_data is None:
-                return CloudRawStatus(exists=False, bag_count=0, bag_names=[], total_size=0)
+                return CloudRawStatus(
+                    exists=False, 
+                    bag_count=0, 
+                    bag_names=[], 
+                    bag_sizes={},
+                    total_size=0
+                )
             
             # Extract bag information
             bag_names = path_data.get('bags', [])
-            bag_sizes = path_data.get('sizes', [])
-            total_size = sum(bag_sizes) if bag_sizes else 0
+            bag_sizes_list = path_data.get('sizes', [])
+            
+            # Create bag_sizes dict
+            bag_sizes = {}
+            if len(bag_names) == len(bag_sizes_list):
+                bag_sizes = dict(zip(bag_names, bag_sizes_list))
+            else:
+                # Fallback if sizes don't match names
+                bag_sizes = {name: 0 for name in bag_names}
+            
+            total_size = sum(bag_sizes.values())
             
             return CloudRawStatus(
                 exists=len(bag_names) > 0,
                 bag_count=len(bag_names),
                 bag_names=sorted(bag_names),
+                bag_sizes=bag_sizes,
                 total_size=total_size
             )
             
         except Exception as e:
             logger.error(f"Error getting raw bags info for {coord}: {e}")
-            return CloudRawStatus(exists=False, bag_count=0, bag_names=[], total_size=0)
+            return CloudRawStatus(
+                exists=False, 
+                bag_count=0, 
+                bag_names=[], 
+                bag_sizes={},
+                total_size=0
+            )
     
     def get_ml_status(self, coord: RunCoordinate) -> CloudMLStatus:
         """
@@ -218,31 +240,66 @@ class CloudInventoryService:
             inventory = self.get_full_inventory()
             
             if 'ml' not in inventory:
-                return CloudMLStatus(exists=False, total_samples=0, bag_samples={})
+                return CloudMLStatus(
+                    exists=False, 
+                    total_samples=0, 
+                    bag_samples={},
+                    bag_files={}
+                )
             
             # Navigate to coordinate
             path_data = self._navigate_to_coordinate(inventory['ml'], coord)
             
             if path_data is None:
-                return CloudMLStatus(exists=False, total_samples=0, bag_samples={})
+                return CloudMLStatus(
+                    exists=False, 
+                    total_samples=0, 
+                    bag_samples={},
+                    bag_files={}
+                )
             
             # Extract ML sample information
-            bag_samples = path_data.get('bag_samples', {})
-            total_samples = sum(
-                bag_data.get('label_count', 0) 
-                for bag_data in bag_samples.values() 
-                if isinstance(bag_data, dict)
-            )
+            bag_samples_data = path_data.get('bag_samples', {})
+            
+            # Build bag_samples (counts) and bag_files (file lists)
+            bag_samples = {}
+            bag_files = {}
+            total_samples = 0
+            
+            for bag_name, bag_data in bag_samples_data.items():
+                if isinstance(bag_data, dict):
+                    # Extract counts for bag_samples
+                    frame_count = bag_data.get('frame_count', 0)
+                    label_count = bag_data.get('label_count', 0)
+                    
+                    bag_samples[bag_name] = {
+                        'frame_count': frame_count,
+                        'label_count': label_count
+                    }
+                    
+                    # Extract file lists for bag_files
+                    bag_files[bag_name] = {
+                        'frames': bag_data.get('frame_files', []),
+                        'labels': bag_data.get('label_files', [])
+                    }
+                    
+                    total_samples += label_count
             
             return CloudMLStatus(
                 exists=total_samples > 0,
                 total_samples=total_samples,
-                bag_samples=bag_samples
+                bag_samples=bag_samples,
+                bag_files=bag_files
             )
             
         except Exception as e:
             logger.error(f"Error getting ML samples info for {coord}: {e}")
-            return CloudMLStatus(exists=False, total_samples=0, bag_samples={})
+            return CloudMLStatus(
+                exists=False, 
+                total_samples=0, 
+                bag_samples={},
+                bag_files={}
+            )
     
     # ============================================================================
     # Page-Specific Queries - Return appropriate models

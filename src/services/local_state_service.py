@@ -15,8 +15,7 @@ import logging
 from src.models import ExtractionDetails, LocalMLStatus
 from src.models import RunCoordinate
 from src.models import ExtractionStatus, LocalRawStatus
-
-
+from src.services.coordinate_path_builder import CoordinatePathBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -30,26 +29,22 @@ class LocalStateService:
     only state queries.
     """
     
-    def __init__(self, raw_root: Path, processed_root: Path, ml_root: Path):
+    def __init__(self, path_builder: CoordinatePathBuilder):
         """
-        Initialize LocalStateService with data root paths.
+        Initialize LocalStateService with path builder.
         
         Args:
-            raw_root: Path to raw data directory
-            processed_root: Path to processed data directory  
-            ml_root: Path to ML data directory
+            path_builder: CoordinatePathBuilder service for all path operations
         """
-        self.raw_root = Path(raw_root)
-        self.processed_root = Path(processed_root)
-        self.ml_root = Path(ml_root)
+        self.path_builder = path_builder
         
         # Ensure paths exist (for safety, but don't create them)
-        if not self.raw_root.exists():
-            logger.warning(f"Raw data root does not exist: {self.raw_root}")
-        if not self.processed_root.exists():
-            logger.warning(f"Processed data root does not exist: {self.processed_root}")
-        if not self.ml_root.exists():
-            logger.warning(f"ML data root does not exist: {self.ml_root}")
+        if not self.path_builder.raw_root.exists():
+            logger.warning(f"Raw data root does not exist: {self.path_builder.raw_root}")
+        if not self.path_builder.processed_root.exists():
+            logger.warning(f"Processed data root does not exist: {self.path_builder.processed_root}")
+        if not self.path_builder.ml_root.exists():
+            logger.warning(f"ML data root does not exist: {self.path_builder.ml_root}")
     
     # ========================================================================
     # Raw Data Queries (Atomic)
@@ -66,16 +61,15 @@ class LocalStateService:
             LocalRawStatus with download information
         """
         try:
-            # Construct path: raw_root/cid/regionid/fieldid/twid/lbid/timestamp/
-            coord_path = self._build_coordinate_path(self.raw_root, coord)
+            coord_path = self.path_builder.get_local_raw_coordinate_path(coord)
             
             if not coord_path.exists():
                 return LocalRawStatus(
                     downloaded=False,
                     bag_count=0,
                     bag_names=[],
-                    total_size=0,
-                    path=None
+                    bag_sizes={},
+                    total_size=0
                 )
             
             # Find all .bag files in the coordinate directory
@@ -86,28 +80,31 @@ class LocalStateService:
                     downloaded=False,
                     bag_count=0,
                     bag_names=[],
-                    total_size=0,
-                    path=str(coord_path)
+                    bag_sizes={},
+                    total_size=0
                 )
             
-            # Calculate total size and collect names
+            # Calculate total size and collect names with sizes
             total_size = 0
             bag_names = []
+            bag_sizes = {}
             
             for bag_file in bag_files:
-                bag_names.append(bag_file.name)  # Always add name
+                bag_names.append(bag_file.name)
                 try:
-                    total_size += bag_file.stat().st_size
+                    file_size = bag_file.stat().st_size
+                    bag_sizes[bag_file.name] = file_size
+                    total_size += file_size
                 except OSError as e:
                     logger.warning(f"Could not stat bag file {bag_file}: {e}")
-                    # Continue without adding size but name is already added
+                    bag_sizes[bag_file.name] = 0
             
             return LocalRawStatus(
                 downloaded=True,
                 bag_count=len(bag_files),
                 bag_names=sorted(bag_names),
-                total_size=total_size,
-                path=str(coord_path)
+                bag_sizes=bag_sizes,
+                total_size=total_size
             )
             
         except Exception as e:
@@ -116,8 +113,8 @@ class LocalStateService:
                 downloaded=False,
                 bag_count=0,
                 bag_names=[],
-                total_size=0,
-                path=None
+                bag_sizes={},
+                total_size=0
             )
     
     def check_extracted(self, coord: RunCoordinate) -> ExtractionStatus:
@@ -131,8 +128,7 @@ class LocalStateService:
             ExtractionStatus with extraction information
         """
         try:
-            # Construct path: processed_root/cid/regionid/fieldid/twid/lbid/timestamp/
-            coord_path = self._build_coordinate_path(self.processed_root, coord)
+            coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
             
             if not coord_path.exists():
                 return ExtractionStatus(
@@ -190,7 +186,7 @@ class LocalStateService:
             ExtractionDetails with detailed extraction information
         """
         try:
-            coord_path = self._build_coordinate_path(self.processed_root, coord)
+            coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
             
             if not coord_path.exists():
                 return ExtractionDetails(
@@ -261,63 +257,61 @@ class LocalStateService:
             LocalMLStatus with ML export information
         """
         try:
-            # Focus on ML/raw structure (exported annotated samples)
-            ml_raw_path = self._build_coordinate_path(self.ml_root / "raw", coord)
+            ml_raw_path = self.path_builder.get_local_ml_raw_path(coord)
             
             if not ml_raw_path.exists():
                 return LocalMLStatus(
                     exists=False,
-                    path=None,
                     file_counts={},
                     total_size=0,
-                    subdirectories=[],
-                    sample_files=[]
+                    bag_structure={}
                 )
             
-            # Get file counts and details
+            # Get file counts and total size
             file_counts = self._count_files_in_path(ml_raw_path)
-            
-            # Get subdirectories and sample files
-            subdirs = []
-            sample_files = []
             total_size = 0
+            bag_structure = {}
             
+            # Build bag structure and calculate total size
             for item in ml_raw_path.rglob("*"):
-                if item.is_dir() and item != ml_raw_path:
-                    relative_path = str(item.relative_to(ml_raw_path))
-                    if relative_path not in subdirs:
-                        subdirs.append(relative_path)
-                elif item.is_file():
+                if item.is_file():
                     try:
                         file_size = item.stat().st_size
                         total_size += file_size
-                        relative_path = str(item.relative_to(ml_raw_path))
-                        sample_files.append({
-                            "path": relative_path,
-                            "size": file_size,
-                            "extension": item.suffix.lower() if item.suffix else "no_extension"
-                        })
+                        
+                        # Parse bag structure from path
+                        relative_path = item.relative_to(ml_raw_path)
+                        path_parts = relative_path.parts
+                        
+                        # Expected structure: bag_name/file_type/filename
+                        if len(path_parts) >= 3:
+                            bag_name = path_parts[0]
+                            file_type = path_parts[1]  # "frames" or "labels"
+                            filename = path_parts[2]
+                            
+                            if file_type in ['frames', 'labels']:
+                                if bag_name not in bag_structure:
+                                    bag_structure[bag_name] = {'frames': [], 'labels': []}
+                                
+                                bag_structure[bag_name][file_type].append(filename)
+                                
                     except OSError:
                         pass  # Skip files we can't read
             
             return LocalMLStatus(
-                exists=True,
-                path=str(ml_raw_path),
+                exists=total_size > 0,
                 file_counts=file_counts,
                 total_size=total_size,
-                subdirectories=sorted(subdirs),
-                sample_files=sample_files
+                bag_structure=bag_structure
             )
             
         except Exception as e:
             logger.error(f"Error checking ML export for {coord}: {e}")
             return LocalMLStatus(
                 exists=False,
-                path=None,
                 file_counts={},
                 total_size=0,
-                subdirectories=[],
-                sample_files=[]
+                bag_structure={}
             )
     
     def get_export_ids(self) -> List[str]:
@@ -328,7 +322,8 @@ class LocalStateService:
             List of export IDs
         """
         try:
-            tracking_file = self.ml_root / "raw" / ".export_tracking.json"
+            # Use path builder for export tracking file path
+            tracking_file = self.path_builder.get_ml_export_tracking_file()
             
             if not tracking_file.exists():
                 logger.info(f"Export tracking file not found: {tracking_file}")
@@ -364,7 +359,8 @@ class LocalStateService:
             Dictionary with export information
         """
         try:
-            tracking_file = self.ml_root / "raw" / ".export_tracking.json"
+            # Use path builder for export tracking file path
+            tracking_file = self.path_builder.get_ml_export_tracking_file()
             
             if not tracking_file.exists():
                 return {
@@ -405,19 +401,6 @@ class LocalStateService:
     # ========================================================================
     # Helper Methods
     # ========================================================================
-    
-    def _build_coordinate_path(self, root_path: Path, coord: RunCoordinate) -> Path:
-        """
-        Build filesystem path from coordinate.
-        
-        Args:
-            root_path: Base path (raw_root, processed_root, etc.)
-            coord: RunCoordinate to build path for
-            
-        Returns:
-            Path object for the coordinate
-        """
-        return root_path / coord.cid / coord.regionid / coord.fieldid / coord.twid / coord.lbid / coord.timestamp
     
     def _count_files_in_path(self, path: Path) -> Dict[str, int]:
         """

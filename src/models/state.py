@@ -5,38 +5,45 @@ from .core import DataStatus, RunCoordinate
 
 @dataclass
 class CloudRawStatus:
-    """Cloud raw data status for a coordinate."""
+    """Enhanced cloud raw data status."""
     exists: bool
     bag_count: int
-    bag_names: List[str]
+    bag_names: List[str]  # Discovered bag names in cloud format
+    bag_sizes: Dict[str, int]  # bag_name -> size_bytes
     total_size: int
-
 
 @dataclass
 class CloudMLStatus:
-    """Cloud ML data status for a coordinate."""
+    """Enhanced cloud ML data status."""
     exists: bool
     total_samples: int
     bag_samples: Dict[str, Dict]  # bag_name -> {frame_count: int, label_count: int}
-
+    bag_files: Dict[str, Dict[str, List[str]]]  # bag_name -> {frames: [filenames], labels: [filenames]}
 
 @dataclass
 class LocalRawStatus:
-    """Local raw data status for a coordinate."""
-    downloaded: bool
+    """Local raw data status."""
+    downloaded: bool  # Keep "downloaded" - makes sense for local raw data
     bag_count: int
-    bag_names: List[str]
+    bag_names: List[str]  # Local format bag names
+    bag_sizes: Dict[str, int]  # bag_name -> size_bytes  
     total_size: int
-    path: Optional[str] = None
 
+@dataclass
+class LocalMLStatus:
+    """Local ML data status."""
+    exists: bool
+    file_counts: Dict[str, int]  # extension -> count
+    total_size: int
+    bag_structure: Dict[str, Dict[str, List[str]]]  # bag_name -> {frames: [files], labels: [files]}
 
+# Keep existing models that don't need changes
 @dataclass
 class ExtractionStatus:
     """Local extraction status for a coordinate."""
     extracted: bool
     files: Dict[str, bool] = field(default_factory=dict)
     path: Optional[str] = None
-
 
 @dataclass
 class ExtractionDetails:
@@ -48,18 +55,6 @@ class ExtractionDetails:
     total_size: int
     file_details: Dict[str, Dict]  # relative_path -> {size: int, type: str}
 
-
-@dataclass
-class LocalMLStatus:
-    """Local ML export status for a coordinate."""
-    exists: bool
-    path: Optional[str]
-    file_counts: Dict[str, int]  # extension -> count
-    total_size: int
-    subdirectories: List[str]
-    sample_files: List[Dict]  # List of {path: str, size: int, extension: str}
-
-
 @dataclass
 class ExportInfo:
     """Export tracking information."""
@@ -67,7 +62,6 @@ class ExportInfo:
     export_id: Optional[str] = None
     info: Optional[Dict] = None
     error: Optional[str] = None
-
 
 @dataclass
 class RunState:

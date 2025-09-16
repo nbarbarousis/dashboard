@@ -189,6 +189,7 @@ def main():
             ml_data_root=Path("/home/nikbarb/data-annot-pipeline/data/ML"),
             cache_root=Path("data/cache"),
             raw_bucket_name="terra-weeder-deployments-data-raw",
+            processed_bucket_name="terra-weeder-deployments-data-processed",
             ml_bucket_name="terra-weeder-deployments-data-ml",
             extraction_docker_image="rosbag-extractor",
             expected_samples_per_bag=17

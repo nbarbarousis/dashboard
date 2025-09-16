@@ -14,6 +14,7 @@ class DashboardConfig:
     
     # Cloud configurations
     raw_bucket_name: str
+    processed_bucket_name: str
     ml_bucket_name: str
     
     # Docker configurations
@@ -31,10 +32,10 @@ class DashboardConfig:
             ml_data_root=Path(config_dict['ml_data_root']),
             cache_root=Path(config_dict['cache_root']),
             raw_bucket_name=config_dict['raw_bucket_name'],
+            processed_bucket_name=config_dict['processed_bucket_name'],
             ml_bucket_name=config_dict['ml_bucket_name'],
             extraction_docker_image=config_dict['extraction_docker_image'],
             expected_samples_per_bag=config_dict.get('expected_samples_per_bag', 17),
-            cache_refresh_days=config_dict.get('cache_refresh_days', 7)
         )
 
 
