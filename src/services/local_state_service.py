@@ -313,6 +313,145 @@ class LocalStateService:
                 total_size=0,
                 bag_structure={}
             )
+        
+    # ========================================================================
+    # Bulk Discovery Methods
+    # ========================================================================
+    
+    def get_all_raw_statuses(self) -> Dict[RunCoordinate, LocalRawStatus]:
+        """
+        Walk filesystem to discover all local raw data.
+        
+        Returns:
+            Dictionary mapping RunCoordinate to LocalRawStatus for all found coordinates
+        """
+        results = {}
+        
+        if not self.path_builder.raw_root.exists():
+            logger.warning(f"Raw data root does not exist: {self.path_builder.raw_root}")
+            return results
+        
+        try:
+            # Walk filesystem hierarchy: cid/regionid/fieldid/twid/lbid/timestamp/
+            for cid_dir in self.path_builder.raw_root.iterdir():
+                if not cid_dir.is_dir():
+                    continue
+                    
+                for regionid_dir in cid_dir.iterdir():
+                    if not regionid_dir.is_dir():
+                        continue
+                        
+                    for fieldid_dir in regionid_dir.iterdir():
+                        if not fieldid_dir.is_dir():
+                            continue
+                            
+                        for twid_dir in fieldid_dir.iterdir():
+                            if not twid_dir.is_dir():
+                                continue
+                                
+                            for lbid_dir in twid_dir.iterdir():
+                                if not lbid_dir.is_dir():
+                                    continue
+                                    
+                                for timestamp_dir in lbid_dir.iterdir():
+                                    if not timestamp_dir.is_dir():
+                                        continue
+                                    
+                                    # Create coordinate from directory names
+                                    coord = RunCoordinate(
+                                        cid=cid_dir.name,
+                                        regionid=regionid_dir.name,
+                                        fieldid=fieldid_dir.name,
+                                        twid=twid_dir.name,
+                                        lbid=lbid_dir.name,
+                                        timestamp=timestamp_dir.name
+                                    )
+                                    
+                                    # Get status for this coordinate
+                                    try:
+                                        results[coord] = self.get_raw_status(coord)
+                                    except Exception as e:
+                                        logger.warning(f"Error getting raw status for {coord}: {e}")
+                                        # Continue with other coordinates
+                                        continue
+            
+            logger.info(f"Discovered {len(results)} raw coordinates")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error during raw filesystem discovery: {e}")
+            return results
+    
+    def get_all_ml_statuses(self) -> Dict[RunCoordinate, LocalMLStatus]:
+        """
+        Walk ML/raw filesystem to discover all local ML data.
+        
+        Returns:
+            Dictionary mapping RunCoordinate to LocalMLStatus for all found coordinates
+        """
+        results = {}
+        
+        # ML data is in ml_root/raw/ structure
+        ml_raw_root = self.path_builder.ml_root / "raw"
+        
+        if not ml_raw_root.exists():
+            logger.warning(f"ML raw data root does not exist: {ml_raw_root}")
+            return results
+        
+        try:
+            # Walk filesystem hierarchy: ml_root/raw/cid/regionid/fieldid/twid/lbid/timestamp/
+            for cid_dir in ml_raw_root.iterdir():
+                if not cid_dir.is_dir():
+                    continue
+                    
+                for regionid_dir in cid_dir.iterdir():
+                    if not regionid_dir.is_dir():
+                        continue
+                        
+                    for fieldid_dir in regionid_dir.iterdir():
+                        if not fieldid_dir.is_dir():
+                            continue
+                            
+                        for twid_dir in fieldid_dir.iterdir():
+                            if not twid_dir.is_dir():
+                                continue
+                                
+                            for lbid_dir in twid_dir.iterdir():
+                                if not lbid_dir.is_dir():
+                                    continue
+                                    
+                                for timestamp_dir in lbid_dir.iterdir():
+                                    if not timestamp_dir.is_dir():
+                                        continue
+                                    
+                                    # Create coordinate from directory names
+                                    coord = RunCoordinate(
+                                        cid=cid_dir.name,
+                                        regionid=regionid_dir.name,
+                                        fieldid=fieldid_dir.name,
+                                        twid=twid_dir.name,
+                                        lbid=lbid_dir.name,
+                                        timestamp=timestamp_dir.name
+                                    )
+                                    
+                                    # Get status for this coordinate
+                                    try:
+                                        results[coord] = self.get_ml_status(coord)
+                                    except Exception as e:
+                                        logger.warning(f"Error getting ML status for {coord}: {e}")
+                                        # Continue with other coordinates
+                                        continue
+            
+            logger.info(f"Discovered {len(results)} ML coordinates")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error during ML filesystem discovery: {e}")
+            return results
+        
+    # ========================================================================
+    # Export Tracking Methods
+    # ========================================================================
     
     def get_export_ids(self) -> List[str]:
         """

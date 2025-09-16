@@ -300,6 +300,142 @@ class CloudInventoryService:
                 bag_samples={},
                 bag_files={}
             )
+        
+    # ========================================================================
+    # Bulk Discovery Methods
+    # ========================================================================
+    
+    def get_all_raw_statuses(self) -> Dict[RunCoordinate, CloudRawStatus]:
+        """
+        Get all cloud raw statuses from cache.
+        
+        Returns:
+            Dictionary mapping RunCoordinate to CloudRawStatus for all cached coordinates
+        """
+        results = {}
+        
+        try:
+            inventory = self.get_full_inventory()
+            
+            if 'raw' not in inventory:
+                logger.warning("No raw data found in cloud inventory")
+                return results
+            
+            # Walk cache hierarchy to find all coordinates
+            for cid, cid_data in inventory['raw'].items():
+                if not isinstance(cid_data, dict):
+                    continue
+                    
+                for regionid, regionid_data in cid_data.items():
+                    if not isinstance(regionid_data, dict):
+                        continue
+                        
+                    for fieldid, fieldid_data in regionid_data.items():
+                        if not isinstance(fieldid_data, dict):
+                            continue
+                            
+                        for twid, twid_data in fieldid_data.items():
+                            if not isinstance(twid_data, dict):
+                                continue
+                                
+                            for lbid, lbid_data in twid_data.items():
+                                if not isinstance(lbid_data, dict):
+                                    continue
+                                    
+                                for timestamp, timestamp_data in lbid_data.items():
+                                    if not isinstance(timestamp_data, dict):
+                                        continue
+                                    
+                                    # Create coordinate from cache keys
+                                    coord = RunCoordinate(
+                                        cid=cid,
+                                        regionid=regionid,
+                                        fieldid=fieldid,
+                                        twid=twid,
+                                        lbid=lbid,
+                                        timestamp=timestamp
+                                    )
+                                    
+                                    # Get status for this coordinate
+                                    try:
+                                        results[coord] = self.get_raw_status(coord)
+                                    except Exception as e:
+                                        logger.warning(f"Error getting raw status for {coord}: {e}")
+                                        # Continue with other coordinates
+                                        continue
+            
+            logger.info(f"Discovered {len(results)} cloud raw coordinates")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error during cloud raw discovery: {e}")
+            return results
+    
+    def get_all_ml_statuses(self) -> Dict[RunCoordinate, CloudMLStatus]:
+        """
+        Get all cloud ML statuses from cache.
+        
+        Returns:
+            Dictionary mapping RunCoordinate to CloudMLStatus for all cached coordinates
+        """
+        results = {}
+        
+        try:
+            inventory = self.get_full_inventory()
+            
+            if 'ml' not in inventory:
+                logger.warning("No ML data found in cloud inventory")
+                return results
+            
+            # Walk cache hierarchy to find all coordinates
+            for cid, cid_data in inventory['ml'].items():
+                if not isinstance(cid_data, dict):
+                    continue
+                    
+                for regionid, regionid_data in cid_data.items():
+                    if not isinstance(regionid_data, dict):
+                        continue
+                        
+                    for fieldid, fieldid_data in regionid_data.items():
+                        if not isinstance(fieldid_data, dict):
+                            continue
+                            
+                        for twid, twid_data in fieldid_data.items():
+                            if not isinstance(twid_data, dict):
+                                continue
+                                
+                            for lbid, lbid_data in twid_data.items():
+                                if not isinstance(lbid_data, dict):
+                                    continue
+                                    
+                                for timestamp, timestamp_data in lbid_data.items():
+                                    if not isinstance(timestamp_data, dict):
+                                        continue
+                                    
+                                    # Create coordinate from cache keys
+                                    coord = RunCoordinate(
+                                        cid=cid,
+                                        regionid=regionid,
+                                        fieldid=fieldid,
+                                        twid=twid,
+                                        lbid=lbid,
+                                        timestamp=timestamp
+                                    )
+                                    
+                                    # Get status for this coordinate
+                                    try:
+                                        results[coord] = self.get_ml_status(coord)
+                                    except Exception as e:
+                                        logger.warning(f"Error getting ML status for {coord}: {e}")
+                                        # Continue with other coordinates
+                                        continue
+            
+            logger.info(f"Discovered {len(results)} cloud ML coordinates")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error during cloud ML discovery: {e}")
+            return results
     
     # ============================================================================
     # Page-Specific Queries - Return appropriate models
