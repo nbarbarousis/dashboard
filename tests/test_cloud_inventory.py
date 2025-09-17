@@ -16,7 +16,7 @@ from src.models import RunCoordinate
 from src.models import CloudRawStatus, CloudMLStatus
 from src.models.pages import TimelineData
 from src.models.config import CacheInfo
-from src.services.cloud_inventory_service import CloudInventoryService
+from services.core.cloud_inventory_service import CloudInventoryService
 
 # ============================================================================
 # FIXTURES

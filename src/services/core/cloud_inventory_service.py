@@ -261,7 +261,7 @@ class CloudInventoryService:
             # Extract ML sample information
             bag_samples_data = path_data.get('bag_samples', {})
             
-            # Build bag_samples (counts) and bag_files (file lists)
+            # Build bag_samples (counts) and bag_files (file dicts)
             bag_samples = {}
             bag_files = {}
             total_samples = 0
@@ -277,10 +277,26 @@ class CloudInventoryService:
                         'label_count': label_count
                     }
                     
-                    # Extract file lists for bag_files
+                    # Extract file lists and sizes for bag_files
+                    frame_files = bag_data.get('frame_files', [])
+                    label_files = bag_data.get('label_files', [])
+                    frame_sizes = bag_data.get('frame_sizes', [])
+                    label_sizes = bag_data.get('label_sizes', [])
+                    
+                    # Create file dictionaries with sizes
+                    frame_file_dict = {}
+                    for i, filename in enumerate(frame_files):
+                        size = frame_sizes[i] if i < len(frame_sizes) else 0
+                        frame_file_dict[filename] = size
+                    
+                    label_file_dict = {}
+                    for i, filename in enumerate(label_files):
+                        size = label_sizes[i] if i < len(label_sizes) else 0
+                        label_file_dict[filename] = size
+                    
                     bag_files[bag_name] = {
-                        'frames': bag_data.get('frame_files', []),
-                        'labels': bag_data.get('label_files', [])
+                        'frames': frame_file_dict,
+                        'labels': label_file_dict
                     }
                     
                     total_samples += label_count
@@ -667,7 +683,9 @@ class CloudInventoryService:
                         'frame_count': 0,
                         'label_count': 0,
                         'frame_files': [],
-                        'label_files': []
+                        'label_files': [],
+                        'frame_sizes': [],  # Add this line
+                        'label_sizes': []   # Add this line
                     }
                 
                 # Update counts and files
@@ -675,9 +693,11 @@ class CloudInventoryService:
                 if data_type == 'frames':
                     bag_data['frame_count'] += 1
                     bag_data['frame_files'].append(filename)
+                    bag_data['frame_sizes'].append(blob.size or 0)  # Add this line
                 elif data_type == 'labels':
                     bag_data['label_count'] += 1
                     bag_data['label_files'].append(filename)
+                    bag_data['label_sizes'].append(blob.size or 0)  # Add this line
     
     def _process_generic_blob(self, blob, bucket_cache: Dict) -> None:
         """Process blob from generic bucket - just track existence."""

@@ -69,11 +69,11 @@ class CoordinatePathBuilder:
     
     def get_cloud_raw_bag_path(self, coord: RunCoordinate, bag_name: str) -> Path:
         """Get cloud raw bag path."""
-        return Path(f"gs://{self.bucket_names['raw']}/{coord.cid}/{coord.regionid}/{coord.fieldid}/{coord.twid}/{coord.lbid}/{coord.timestamp}/rosbag/{bag_name}")
+        return Path(f"{coord.cid}/{coord.regionid}/{coord.fieldid}/{coord.twid}/{coord.lbid}/{coord.timestamp}/rosbag/{bag_name}")
     
     def get_cloud_ml_file_path(self, coord: RunCoordinate, bag_name: str, file_type: str, filename: str) -> Path:
         """Get cloud ML file path."""
-        return Path(f"gs://{self.bucket_names['ml']}/raw/{coord.cid}/{coord.regionid}/{coord.fieldid}/{coord.twid}/{coord.lbid}/{coord.timestamp}/rosbag/{bag_name}/{file_type}/{filename}")
+        return Path(f"raw/{coord.cid}/{coord.regionid}/{coord.fieldid}/{coord.twid}/{coord.lbid}/{coord.timestamp}/rosbag/{bag_name}/{file_type}/{filename}")
     
     # ========================================================================
     # Name Translation Methods

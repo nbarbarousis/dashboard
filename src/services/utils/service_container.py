@@ -13,6 +13,7 @@ from ..core.local_state_service import LocalStateService
 from ..core.coordinate_path_builder import CoordinatePathBuilder
 from ..coordination.data_coordination_service import DataCoordinationService
 from ..pages.temporal_coverage_service import TemporalCoverageService
+from ..cloud_operations.cloud_operations_service import CloudOperationService
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,8 @@ class ServiceContainer:
     # Page services
     temporal_coverage: TemporalCoverageService
     
-    # Operation services (future)
-    # raw_download: RawDownloadOperation
-    # ml_upload: MLUploadOperation
+    # Operation services
+    cloud_operations: CloudOperationService
     
     @classmethod
     def initialize(cls, config: DashboardConfig) -> 'ServiceContainer':
@@ -75,6 +75,13 @@ class ServiceContainer:
             temporal_coverage = TemporalCoverageService(
                 data_coordination=data_coordination
             )
+
+            # 5. Initialize operation services
+            cloud_operations = CloudOperationService(
+                cloud_service=cloud_service,
+                local_service=local_service,
+                path_builder=path_builder
+            )
             
             logger.info("All services initialized successfully")
             
@@ -83,7 +90,8 @@ class ServiceContainer:
                 local_state=local_service,
                 path_builder=path_builder,
                 data_coordination=data_coordination,
-                temporal_coverage=temporal_coverage
+                temporal_coverage=temporal_coverage,
+                cloud_operations=cloud_operations
             )
             
         except Exception as e:

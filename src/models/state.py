@@ -18,7 +18,7 @@ class CloudMLStatus:
     exists: bool
     total_samples: int
     bag_samples: Dict[str, Dict]  # bag_name -> {frame_count: int, label_count: int}
-    bag_files: Dict[str, Dict[str, List[str]]]  # bag_name -> {frames: [filenames], labels: [filenames]}
+    bag_files: Dict[str, Dict[str, Dict[str, int]]]  # bag_name -> {frames: {filename: size}, labels: {filename: size}}
 
 @dataclass
 class LocalRawStatus:
@@ -32,10 +32,11 @@ class LocalRawStatus:
 @dataclass
 class LocalMLStatus:
     """Local ML data status."""
-    exists: bool
-    file_counts: Dict[str, int]  # extension -> count
-    total_size: int
-    bag_structure: Dict[str, Dict[str, List[str]]]  # bag_name -> {frames: [files], labels: [files]}
+    downloaded: bool  # Match local raw pattern
+    total_samples: int
+    bag_samples: Dict[str, Dict]  # bag_name -> {frame_count: int, label_count: int}
+    bag_files: Dict[str, Dict[str, Dict[str, int]]]  # bag_name -> {frames: {filename: size}, labels: {filename: size}}
+    file_counts: Dict[str, int]  # extension -> count (keep for summary info)
 
 # Keep existing models that don't need changes
 @dataclass

@@ -19,8 +19,7 @@ from .pages.temporal_coverage_service import TemporalCoverageService
 from .utils.service_container import ServiceContainer
 
 # Operation services (future)
-# from .operations.raw_download_operation import RawDownloadOperation
-# from .operations.ml_upload_operation import MLUploadOperation
+from .cloud_operations.cloud_operations_service import CloudOperationService
 
 __all__ = [
     # Core
@@ -36,4 +35,7 @@ __all__ = [
     
     # Utils
     'ServiceContainer',
+
+    # Operations
+    'CloudOperationService',
 ]

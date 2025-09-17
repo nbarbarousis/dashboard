@@ -261,23 +261,24 @@ class LocalStateService:
             
             if not ml_raw_path.exists():
                 return LocalMLStatus(
-                    exists=False,
-                    file_counts={},
-                    total_size=0,
-                    bag_structure={}
+                    downloaded=False,
+                    total_samples=0,
+                    bag_samples={},
+                    bag_files={},
+                    file_counts={}
                 )
             
-            # Get file counts and total size
+            # Get file counts and calculate totals
             file_counts = self._count_files_in_path(ml_raw_path)
-            total_size = 0
-            bag_structure = {}
+            bag_samples = {}
+            bag_files = {}
+            total_samples = 0
             
-            # Build bag structure and calculate total size
+            # Build bag structure and calculate totals
             for item in ml_raw_path.rglob("*"):
                 if item.is_file():
                     try:
                         file_size = item.stat().st_size
-                        total_size += file_size
                         
                         # Parse bag structure from path
                         relative_path = item.relative_to(ml_raw_path)
@@ -290,28 +291,41 @@ class LocalStateService:
                             filename = path_parts[2]
                             
                             if file_type in ['frames', 'labels']:
-                                if bag_name not in bag_structure:
-                                    bag_structure[bag_name] = {'frames': [], 'labels': []}
+                                # Initialize bag structures
+                                if bag_name not in bag_samples:
+                                    bag_samples[bag_name] = {'frame_count': 0, 'label_count': 0}
+                                if bag_name not in bag_files:
+                                    bag_files[bag_name] = {'frames': {}, 'labels': {}}
                                 
-                                bag_structure[bag_name][file_type].append(filename)
+                                # Update counts
+                                if file_type == 'frames':
+                                    bag_samples[bag_name]['frame_count'] += 1
+                                elif file_type == 'labels':
+                                    bag_samples[bag_name]['label_count'] += 1
+                                    total_samples += 1  # Labels represent samples
+                                
+                                # Store file with size
+                                bag_files[bag_name][file_type][filename] = file_size
                                 
                     except OSError:
                         pass  # Skip files we can't read
             
             return LocalMLStatus(
-                exists=total_size > 0,
-                file_counts=file_counts,
-                total_size=total_size,
-                bag_structure=bag_structure
+                downloaded=total_samples > 0,
+                total_samples=total_samples,
+                bag_samples=bag_samples,
+                bag_files=bag_files,
+                file_counts=file_counts
             )
             
         except Exception as e:
             logger.error(f"Error checking ML export for {coord}: {e}")
             return LocalMLStatus(
-                exists=False,
-                file_counts={},
-                total_size=0,
-                bag_structure={}
+                downloaded=False,
+                total_samples=0,
+                bag_samples={},
+                bag_files={},
+                file_counts={}
             )
         
     # ========================================================================

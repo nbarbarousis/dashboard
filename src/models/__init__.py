@@ -8,7 +8,7 @@ from .state import (
 )
 
 # Operation models
-from .operations import DownloadJob, ExtractionJob, OperationResult
+from .operations import OperationResult, TransferPlan, TransferJob
 
 # Data containers
 from .data_containers import ExtractedData

@@ -1,58 +1,50 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .core import ProcessingStatus, RunCoordinate
 
-@dataclass
-class DownloadJob:
-    """Single coordinate download operation."""
-    job_id: str
-    coordinate: 'RunCoordinate'
-    source_bucket: str
-    target_path: Path
-    files_to_download: List[str] = field(default_factory=list)
+
+# @dataclass
+# class ExtractionJob:
+#     """Single coordinate extraction operation."""
+#     job_id: str
+#     coordinate: 'RunCoordinate'
+#     source_path: Path
+#     output_path: Path
     
-    # Progress tracking
-    total_files: int = 0
-    files_downloaded: int = 0
-    total_bytes: int = 0
-    bytes_downloaded: int = 0
+#     # Progress tracking
+#     total_bags: int = 0
+#     bags_processed: int = 0
+#     frames_extracted: int = 0
     
-    # Status
-    status: 'ProcessingStatus' = ProcessingStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    
-    @property
-    def progress_percent(self) -> float:
-        if self.total_bytes == 0:
-            return 0.0
-        return (self.bytes_downloaded / self.total_bytes) * 100
+#     # Status
+#     status: 'ProcessingStatus' = ProcessingStatus.PENDING
+#     started_at: Optional[datetime] = None
+#     completed_at: Optional[datetime] = None
+#     error_message: Optional[str] = None
+#     docker_output: Optional[str] = None
 
 
 @dataclass
-class ExtractionJob:
-    """Single coordinate extraction operation."""
-    job_id: str
-    coordinate: 'RunCoordinate'
-    source_path: Path
-    output_path: Path
-    
-    # Progress tracking
-    total_bags: int = 0
-    bags_processed: int = 0
-    frames_extracted: int = 0
-    
-    # Status
-    status: 'ProcessingStatus' = ProcessingStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    docker_output: Optional[str] = None
+class TransferJob:
+    """Specification for any cloud transfer operation."""
+    coordinate: RunCoordinate
+    operation_type: str  # "raw_download", "ml_upload", etc.
+    selection_criteria: Dict  # Flexible criteria per operation
+    conflict_resolution: str = "skip"  # "skip", "overwrite"
+    dry_run: bool = True
 
+@dataclass 
+class TransferPlan:
+    """Detailed plan for any transfer operation."""
+    coordinate: RunCoordinate
+    files_to_transfer: List[Dict]
+    files_to_skip: List[Dict]
+    conflicts: List[Dict]
+    total_size: int
+    total_files: int
 
 @dataclass
 class OperationResult:
