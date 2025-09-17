@@ -1,14 +1,13 @@
 """
 Main Streamlit dashboard application - Updated for new architecture
 """
-
-import logging
 import streamlit as st
+import logging
 from pathlib import Path
 from typing import Dict, Optional
 
 from src.models import DashboardConfig
-from src.services.service_container import ServiceContainer
+from src.services import ServiceContainer
 from src.dashboard.utils.session_state import initialize_session_state
 from src.dashboard.pages import temporal_coverage
 from src.dashboard.components.filters import HierarchicalFilters
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DataOverviewDashboard:
-    """Main dashboard application class using ServiceContainer architecture"""
+    """Main dashboard application class using new ServiceContainer architecture"""
     
     def __init__(self, config: DashboardConfig):
         """Initialize dashboard with configuration"""
@@ -29,8 +28,6 @@ class DataOverviewDashboard:
         # Define available pages
         self.pages = {
             "Temporal Coverage": temporal_coverage,
-            # "Per-Run Analysis": per_run_analysis,  # To be implemented
-            # "Download Manager": download_manager,   # To be implemented
         }
     
     def run(self):
@@ -48,15 +45,14 @@ class DataOverviewDashboard:
         
         # Initialize services if needed
         if not st.session_state.get('services_initialized', False):
-            if self._initialize_services():
+            success = self._initialize_services()
+            if success:
                 st.session_state.services_initialized = True
-                st.session_state.services = self.services
             else:
-                st.error("Failed to initialize services. Please check configuration.")
-                st.stop()
+                st.error("Failed to initialize services. Please check the logs.")
+                return
         else:
-            # Retrieve services from session state
-            self.services = st.session_state.services
+            self.services = st.session_state.get('services')
         
         # Render dashboard
         self._render_dashboard()
@@ -64,19 +60,19 @@ class DataOverviewDashboard:
     def _initialize_services(self) -> bool:
         """Initialize all services via ServiceContainer"""
         try:
-            logger.info("Initializing ServiceContainer...")
-            
-            # Create service container with all services
-            self.services = ServiceContainer.initialize(self.config)
-            
-            # Warm up services (load caches, etc.)
-            self.services.warm_up()
-            
-            logger.info("ServiceContainer initialized successfully")
-            return True
-            
+            with st.spinner("Initializing services..."):
+                self.services = ServiceContainer.initialize(self.config)
+                self.services.warm_up()
+                
+                # Store in session state
+                st.session_state.services = self.services
+                
+                st.success("Services initialized successfully!")
+                return True
+                
         except Exception as e:
-            logger.error(f"Failed to initialize ServiceContainer: {e}")
+            logger.error(f"Service initialization failed: {e}")
+            st.error(f"Service initialization failed: {e}")
             return False
     
     def _render_dashboard(self):
@@ -88,13 +84,9 @@ class DataOverviewDashboard:
         pages = list(self.pages.keys())
         cols = st.columns(len(pages))
         for idx, page_name in enumerate(pages):
-            if cols[idx].button(
-                page_name, 
-                key=f"nav_{page_name.replace(' ', '_')}", 
-                use_container_width=True
-            ):
-                st.session_state.current_page = page_name
-                st.rerun()
+            with cols[idx]:
+                if st.button(page_name, use_container_width=True):
+                    st.session_state.current_page = page_name
         
         st.markdown("")  # spacing
         
@@ -106,22 +98,20 @@ class DataOverviewDashboard:
         
         # Render selected page
         try:
-            page_module = self.pages[current_page]
-            
-            # Pages now receive the entire service container
-            # but should only use data_state service
-            page_module.render(self.services)
-            
+            if current_page in self.pages and self.services:
+                self.pages[current_page].render(self.services)
+            else:
+                st.error(f"Page '{current_page}' not found or services not initialized")
+                
         except Exception as e:
-            st.error(f"Error rendering page '{current_page}': {e}")
-            logger.error(f"Page rendering error: {e}", exc_info=True)
+            logger.error(f"Error rendering page {current_page}: {e}")
+            st.error(f"Error rendering page: {e}")
     
     def _render_sidebar(self):
-        """Render sidebar with hierarchical filters"""
+        """Render sidebar with hierarchical filters using new architecture"""
         st.sidebar.title("Navigation")
         
-        # Render hierarchical filters
-        # Now uses DataStateService instead of raw GCS data
+        # Render hierarchical filters using DataCoordinationService
         self._render_hierarchical_filters()
         
         st.sidebar.divider()
@@ -159,24 +149,21 @@ class DataOverviewDashboard:
             st.sidebar.error("Services unavailable")
     
     def _render_hierarchical_filters(self):
-        """Render the hierarchical filters in sidebar using DataStateService"""
+        """Render the hierarchical filters using DataCoordinationService"""
         st.sidebar.subheader("Data Filters")
         
         if not self.services:
-            st.sidebar.error("Services not available")
+            st.sidebar.error("Services not initialized")
             return
         
         try:
-            # Use the updated HierarchicalFilters that works with DataStateService
-            filters = HierarchicalFilters.render_sidebar(self.services.data_state)
-            
-            # Store filters in session state for pages to access
+            # Use DataCoordinationService for infrastructure-level filter operations
+            filters = HierarchicalFilters.render_sidebar(self.services.data_coordination)
             st.session_state.global_filters = filters
             
         except Exception as e:
+            logger.error(f"Filter rendering error: {e}")
             st.sidebar.error(f"Filter error: {e}")
-            logger.error(f"Filter rendering error: {e}", exc_info=True)
-
 
 def main():
     """Entry point for the dashboard application"""

@@ -8,13 +8,12 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 from typing import Dict, List
 
-from src.services.service_container import ServiceContainer
+from src.services import ServiceContainer
 from src.models import TemporalData, CoverageStatistics, AggregatedTemporalData, LaserBoxStats
-
 
 def render(services: ServiceContainer):
     """
-    Render the temporal coverage page using ServiceContainer.
+    Render the temporal coverage page using new ServiceContainer architecture.
     
     Handles both individual LB view and aggregated "All" view.
     """
@@ -26,7 +25,7 @@ def render(services: ServiceContainer):
     missing_filters = [f for f in required_filters if not filters.get(f)]
     
     if missing_filters:
-        st.info(f"Please select all filter levels (except laser box) in the sidebar to view temporal coverage")
+        st.info(f"Please select: {', '.join(missing_filters)}")
         return
     
     st.divider()
@@ -41,59 +40,58 @@ def render(services: ServiceContainer):
 
 
 def _render_individual_lb_view(services: ServiceContainer, filters: Dict):
-    """Render the individual laser box view (existing functionality)."""
+    """Render the individual laser box view."""
     try:
-        # Get temporal data and statistics using the existing service
-        temporal_data = services.data_state.get_temporal_coverage_data(filters)
-        coverage_stats = services.data_state.get_coverage_statistics(filters)
+        # Use new temporal coverage service
+        temporal_data = services.temporal_coverage.get_temporal_coverage_data(filters)
+        stats = services.temporal_coverage.get_coverage_statistics(filters)
         
-        # Check if we have data
         if not temporal_data.timestamps:
-            st.warning("No data available for the selected filters")
+            st.warning("No temporal data found for selected filters")
             return
             
     except Exception as e:
-        st.error(f"Error retrieving temporal data: {e}")
+        st.error(f"Error loading temporal data: {e}")
         return
     
     # Render plots
     with st.container():
-        st.subheader(f"Temporal Coverage Analysis - {filters['lbid']}")
+        st.subheader(f"Temporal Coverage - Laser Box {filters['lbid']}")
         _render_temporal_plots(temporal_data)
     
     st.divider()
     
     # Summary statistics
     with st.container():
-        st.subheader("Coverage Analysis")
-        _render_summary_metrics(temporal_data, coverage_stats, filters)
+        st.subheader("Summary Statistics")
+        _render_summary_metrics(temporal_data, stats, filters)
 
 
 def _render_aggregated_view(services: ServiceContainer, filters: Dict):
     """Render the aggregated view when LB = 'All'."""
     try:
-        # Get aggregated data
-        agg_data = services.data_state.get_temporal_coverage_aggregated(filters)
-        lb_stats = services.data_state.get_laser_box_statistics(filters)
+        # Use new temporal coverage service
+        agg_data = services.temporal_coverage.get_temporal_coverage_aggregated(filters)
+        lb_stats = services.temporal_coverage.get_laser_box_statistics(filters)
         
         if not agg_data.dates:
-            st.warning("No data available for the selected filters")
+            st.warning("No aggregated data found for selected filters")
             return
             
     except Exception as e:
-        st.error(f"Error retrieving aggregated temporal data: {e}")
+        st.error(f"Error loading aggregated data: {e}")
         return
     
     # Top Section: Daily Aggregated Plots
     with st.container():
-        st.subheader("Daily Aggregated Coverage - All Laser Boxes")
+        st.subheader("Aggregated Temporal Coverage - All Laser Boxes")
         _render_aggregated_plots(agg_data)
     
     st.divider()
     
     # Middle Section: Summary Statistics
     with st.container():
-        st.subheader("Aggregated Coverage Statistics")
+        st.subheader("Aggregated Summary")
         _render_aggregated_summary(agg_data, filters)
     
     st.divider()
@@ -102,7 +100,6 @@ def _render_aggregated_view(services: ServiceContainer, filters: Dict):
     with st.container():
         st.subheader("Laser Box Breakdown")
         _render_laser_box_breakdown(lb_stats, agg_data)
-
 
 def _render_aggregated_plots(data: AggregatedTemporalData):
     """Render aggregated temporal plots for all laser boxes."""

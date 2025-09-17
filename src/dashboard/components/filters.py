@@ -1,30 +1,26 @@
 """
-Hierarchical filtering UI components - Updated to use DataStateService
+Hierarchical filtering UI components - Updated for new architecture
 """
-
-import streamlit as st
 from typing import Dict, List, Optional
+import streamlit as st
 
-from src.services.data_state_service import DataStateService
+from src.services import DataCoordinationService
 from src.dashboard.utils.session_state import get_filters, update_filter, clear_all_filters
 
 
 class HierarchicalFilters:
     """
     Reusable hierarchical filtering component with cascading dependencies.
-    Now uses DataStateService instead of direct GCS data access.
+    Now uses DataCoordinationService for infrastructure-level filter operations.
     """
     
     @staticmethod
-    def render_sidebar(data_state_service: DataStateService) -> Dict[str, Optional[str]]:
+    def render_sidebar(data_coordination_service: DataCoordinationService) -> Dict[str, Optional[str]]:
         """
-        Render hierarchical filters in sidebar (5x1 configuration).
-        
-        The key change: instead of getting hierarchy from raw GCS data,
-        we now use DataStateService methods for filter options.
+        Render hierarchical filters in sidebar using infrastructure service.
         
         Args:
-            data_state_service: DataStateService instance
+            data_coordination_service: DataCoordinationService instance
             
         Returns:
             Dictionary of current filter selections
@@ -36,7 +32,7 @@ class HierarchicalFilters:
         selected_filters = {}
         
         # 1. Client Filter
-        client_options = data_state_service.get_filter_options('cid')
+        client_options = data_coordination_service.get_filter_options('cid')
         
         if client_options:
             client_idx = 0
@@ -52,9 +48,6 @@ class HierarchicalFilters:
             
             if selected_cid != current_filters.get('cid'):
                 update_filter('cid', selected_cid)
-                # Clear downstream filters
-                for level in ['regionid', 'fieldid', 'twid', 'lbid']:
-                    update_filter(level, None)
                 st.rerun()
             
             selected_filters['cid'] = selected_cid
@@ -64,7 +57,7 @@ class HierarchicalFilters:
         
         # 2. Region Filter
         if selected_filters['cid']:
-            region_options = data_state_service.get_filter_options(
+            region_options = data_coordination_service.get_filter_options(
                 'regionid', 
                 parent_filters={'cid': selected_filters['cid']}
             )
@@ -83,9 +76,6 @@ class HierarchicalFilters:
                 
                 if selected_regionid != current_filters.get('regionid'):
                     update_filter('regionid', selected_regionid)
-                    # Clear downstream filters
-                    for level in ['fieldid', 'twid', 'lbid']:
-                        update_filter(level, None)
                     st.rerun()
                 
                 selected_filters['regionid'] = selected_regionid
@@ -98,7 +88,7 @@ class HierarchicalFilters:
         
         # 3. Field Filter
         if selected_filters['regionid']:
-            field_options = data_state_service.get_filter_options(
+            field_options = data_coordination_service.get_filter_options(
                 'fieldid',
                 parent_filters={
                     'cid': selected_filters['cid'],
@@ -120,9 +110,6 @@ class HierarchicalFilters:
                 
                 if selected_fieldid != current_filters.get('fieldid'):
                     update_filter('fieldid', selected_fieldid)
-                    # Clear downstream filters
-                    for level in ['twid', 'lbid']:
-                        update_filter(level, None)
                     st.rerun()
                 
                 selected_filters['fieldid'] = selected_fieldid
@@ -135,7 +122,7 @@ class HierarchicalFilters:
         
         # 4. TW Filter
         if selected_filters['fieldid']:
-            tw_options = data_state_service.get_filter_options(
+            tw_options = data_coordination_service.get_filter_options(
                 'twid',
                 parent_filters={
                     'cid': selected_filters['cid'],
@@ -158,8 +145,6 @@ class HierarchicalFilters:
                 
                 if selected_twid != current_filters.get('twid'):
                     update_filter('twid', selected_twid)
-                    # Clear downstream filter
-                    update_filter('lbid', None)
                     st.rerun()
                 
                 selected_filters['twid'] = selected_twid
@@ -172,7 +157,7 @@ class HierarchicalFilters:
         
         # 5. Laser Box Filter (with "All" option)
         if selected_filters['twid']:
-            lb_options = data_state_service.get_filter_options(
+            lb_options = data_coordination_service.get_filter_options(
                 'lbid',
                 parent_filters={
                     'cid': selected_filters['cid'],

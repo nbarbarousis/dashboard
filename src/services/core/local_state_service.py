@@ -15,7 +15,7 @@ import logging
 from src.models import ExtractionDetails, LocalMLStatus
 from src.models import RunCoordinate
 from src.models import ExtractionStatus, LocalRawStatus
-from src.services.coordinate_path_builder import CoordinatePathBuilder
+from .coordinate_path_builder import CoordinatePathBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -117,131 +117,131 @@ class LocalStateService:
                 total_size=0
             )
     
-    def check_extracted(self, coord: RunCoordinate) -> ExtractionStatus:
-        """
-        Check extraction status for single coordinate.
+    # def check_extracted(self, coord: RunCoordinate) -> ExtractionStatus:
+    #     """
+    #     Check extraction status for single coordinate.
         
-        Args:
-            coord: RunCoordinate to check
+    #     Args:
+    #         coord: RunCoordinate to check
             
-        Returns:
-            ExtractionStatus with extraction information
-        """
-        try:
-            coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
+    #     Returns:
+    #         ExtractionStatus with extraction information
+    #     """
+    #     try:
+    #         coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
             
-            if not coord_path.exists():
-                return ExtractionStatus(
-                    extracted=False,
-                    files={},
-                    path=None
-                )
+    #         if not coord_path.exists():
+    #             return ExtractionStatus(
+    #                 extracted=False,
+    #                 files={},
+    #                 path=None
+    #             )
             
-            # Expected extraction files
-            expected_files = {
-                "frames.csv": False,
-                "detections.csv": False,
-                "tracking.csv": False,
-                "detections.json": False,
-                "tracking.json": False,
-                "metadata.json": False
-            }
+    #         # Expected extraction files
+    #         expected_files = {
+    #             "frames.csv": False,
+    #             "detections.csv": False,
+    #             "tracking.csv": False,
+    #             "detections.json": False,
+    #             "tracking.json": False,
+    #             "metadata.json": False
+    #         }
             
-            # Check for extracted files in all subdirectories
-            # (since extraction creates subdirs per bag)
-            files_found = {}
-            any_files_found = False
+    #         # Check for extracted files in all subdirectories
+    #         # (since extraction creates subdirs per bag)
+    #         files_found = {}
+    #         any_files_found = False
             
-            for expected_file in expected_files.keys():
-                # Look for the file in the coordinate directory and subdirectories
-                found_files = list(coord_path.rglob(expected_file))
-                if found_files:
-                    files_found[expected_file] = True
-                    any_files_found = True
-                else:
-                    files_found[expected_file] = False
+    #         for expected_file in expected_files.keys():
+    #             # Look for the file in the coordinate directory and subdirectories
+    #             found_files = list(coord_path.rglob(expected_file))
+    #             if found_files:
+    #                 files_found[expected_file] = True
+    #                 any_files_found = True
+    #             else:
+    #                 files_found[expected_file] = False
             
-            return ExtractionStatus(
-                extracted=any_files_found,
-                files=files_found,
-                path=str(coord_path) if any_files_found else None
-            )
+    #         return ExtractionStatus(
+    #             extracted=any_files_found,
+    #             files=files_found,
+    #             path=str(coord_path) if any_files_found else None
+    #         )
             
-        except Exception as e:
-            logger.error(f"Error checking extraction status for {coord}: {e}")
-            return ExtractionStatus(
-                extracted=False,
-                files={},
-                path=None
-            )
+    #     except Exception as e:
+    #         logger.error(f"Error checking extraction status for {coord}: {e}")
+    #         return ExtractionStatus(
+    #             extracted=False,
+    #             files={},
+    #             path=None
+    #         )
     
-    def get_extraction_details(self, coord: RunCoordinate) -> ExtractionDetails:
-        """
-        Get detailed info about extracted files for single coordinate.
+    # def get_extraction_details(self, coord: RunCoordinate) -> ExtractionDetails:
+    #     """
+    #     Get detailed info about extracted files for single coordinate.
         
-        Args:
-            coord: RunCoordinate to check
+    #     Args:
+    #         coord: RunCoordinate to check
             
-        Returns:
-            ExtractionDetails with detailed extraction information
-        """
-        try:
-            coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
+    #     Returns:
+    #         ExtractionDetails with detailed extraction information
+    #     """
+    #     try:
+    #         coord_path = self.path_builder.get_local_processed_coordinate_path(coord)
             
-            if not coord_path.exists():
-                return ExtractionDetails(
-                    exists=False,
-                    path=None,
-                    subdirectories=[],
-                    total_files=0,
-                    total_size=0,
-                    file_details={}
-                )
+    #         if not coord_path.exists():
+    #             return ExtractionDetails(
+    #                 exists=False,
+    #                 path=None,
+    #                 subdirectories=[],
+    #                 total_files=0,
+    #                 total_size=0,
+    #                 file_details={}
+    #             )
             
-            # Collect information about all files and subdirectories
-            subdirectories = []
-            file_details = {}
-            total_files = 0
-            total_size = 0
+    #         # Collect information about all files and subdirectories
+    #         subdirectories = []
+    #         file_details = {}
+    #         total_files = 0
+    #         total_size = 0
             
-            for item in coord_path.rglob("*"):
-                if item.is_file():
-                    try:
-                        file_size = item.stat().st_size
-                        relative_path = str(item.relative_to(coord_path))
-                        file_details[relative_path] = {
-                            "size": file_size,
-                            "type": item.suffix.lower() if item.suffix else "no_extension"
-                        }
-                        total_files += 1
-                        total_size += file_size
-                    except OSError as e:
-                        logger.warning(f"Could not stat file {item}: {e}")
+    #         for item in coord_path.rglob("*"):
+    #             if item.is_file():
+    #                 try:
+    #                     file_size = item.stat().st_size
+    #                     relative_path = str(item.relative_to(coord_path))
+    #                     file_details[relative_path] = {
+    #                         "size": file_size,
+    #                         "type": item.suffix.lower() if item.suffix else "no_extension"
+    #                     }
+    #                     total_files += 1
+    #                     total_size += file_size
+    #                 except OSError as e:
+    #                     logger.warning(f"Could not stat file {item}: {e}")
                 
-                elif item.is_dir() and item != coord_path:
-                    relative_path = str(item.relative_to(coord_path))
-                    if relative_path not in subdirectories:
-                        subdirectories.append(relative_path)
+    #             elif item.is_dir() and item != coord_path:
+    #                 relative_path = str(item.relative_to(coord_path))
+    #                 if relative_path not in subdirectories:
+    #                     subdirectories.append(relative_path)
             
-            return ExtractionDetails(
-                exists=True,
-                path=str(coord_path),
-                subdirectories=sorted(subdirectories),
-                total_files=total_files,
-                total_size=total_size,
-                file_details=file_details
-            )
+    #         return ExtractionDetails(
+    #             exists=True,
+    #             path=str(coord_path),
+    #             subdirectories=sorted(subdirectories),
+    #             total_files=total_files,
+    #             total_size=total_size,
+    #             file_details=file_details
+    #         )
             
-        except Exception as e:
-            logger.error(f"Error getting extraction details for {coord}: {e}")
-            return ExtractionDetails(
-                exists=False,
-                path=None,
-                subdirectories=[],
-                total_files=0,
-                total_size=0,
-                file_details={}
-            )
+    #     except Exception as e:
+    #         logger.error(f"Error getting extraction details for {coord}: {e}")
+    #         return ExtractionDetails(
+    #             exists=False,
+    #             path=None,
+    #             subdirectories=[],
+    #             total_files=0,
+    #             total_size=0,
+    #             file_details={}
+    #         )
     
     def get_ml_status(self, coord: RunCoordinate) -> LocalMLStatus:
         """
