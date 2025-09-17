@@ -137,8 +137,8 @@ class CloudOperationTemplate(ABC):
         Decide whether to transfer or skip a file based on conflict_resolution:
         - overwrite: always transfer (conflict=True)
         - skip:
-            • if sizes match → skip (conflict=False)
-            • if sizes differ → transfer (conflict=True)
+            • if sizes match → skip (conflict=True but no transfer)
+            • if sizes differ → transfer (conflict=True and transfer)
         Returns:
             (should_transfer, is_conflict)
         """

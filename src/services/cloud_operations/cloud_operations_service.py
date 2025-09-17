@@ -10,6 +10,7 @@ from ..core.coordinate_path_builder import CoordinatePathBuilder
 from .base_template import CloudOperationTemplate
 from .raw_download_operation import RawDownloadOperation
 from .ml_upload_operation import MLUploadOperation  
+from .ml_download_operation import MLDownloadOperation  
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,8 @@ class CloudOperationService:
     
     OPERATIONS: Dict[str, Type[CloudOperationTemplate]] = {
         "raw_download": RawDownloadOperation,
-        "ml_upload": MLUploadOperation,  # future
+        "ml_upload": MLUploadOperation,
+        "ml_download": MLDownloadOperation  # Placeholder for future implementation
     }
     
     def __init__(
