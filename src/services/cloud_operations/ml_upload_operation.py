@@ -34,45 +34,33 @@ class MLUploadOperation(CloudOperationTemplate):
         """Check if local has ML data"""
         return source_state.downloaded and source_state.total_samples > 0
     
+
     def _apply_selection_filter(
         self, source_state: LocalMLStatus, criteria: Dict
     ) -> List[Dict]:
-        """
-        Apply selection to local ML files.
-        
-        Returns:
-            List of file dicts with structure:
-            {
-                'bag_name': str,
-                'file_type': 'frames'|'labels', 
-                'filename': str,
-                'size': int
-            }
-        """
+        """Apply selection to local ML files with support for combined criteria."""
         filtered_files = []
         
-        # Handle different selection criteria
+        # Determine selected bags
         if criteria.get("all", False):
-            # Select all files
-            selected_bags = source_state.bag_files.keys()
-            selected_types = ["frames", "labels"]
+            selected_bags = list(source_state.bag_files.keys())
         elif "bag_names" in criteria:
-            # Select specific bags
             selected_bags = [bag for bag in criteria["bag_names"] 
-                           if bag in source_state.bag_files]
-            selected_types = ["frames", "labels"]
-        elif "file_types" in criteria:
-            # Select specific file types from all bags
-            selected_bags = source_state.bag_files.keys()
+                        if bag in source_state.bag_files]
+        else:
+            # No bag selection means no files
+            return []
+        
+        # Determine selected file types (defaults to both if not specified)
+        if "file_types" in criteria:
             selected_types = [ft for ft in criteria["file_types"] 
                             if ft in ["frames", "labels"]]
         else:
-            logger.error("No valid selection criteria provided")
-            return []
+            selected_types = ["frames", "labels"]
         
-        # Build file list based on selection
+        # Build file list based on both selections
         for bag_name in selected_bags:
-            bag_data = source_state.bag_files[bag_name]
+            bag_data = source_state.bag_files.get(bag_name, {})
             
             for file_type in selected_types:
                 if file_type not in bag_data:

@@ -39,7 +39,7 @@ def parse_args():
         "-t", "--file-types",
         nargs="+",
         choices=["frames", "labels"],
-        help="File types to upload"
+        help="File types to upload (can be combined with --all or --bag-names)"
     )
     p.add_argument(
         "--all",
@@ -104,22 +104,20 @@ def main():
 
     coord = RunCoordinate(*parts)
 
-    # Build selection criteria
+    # In main()
+    # Build selection criteria - allow combinations
     selection_criteria = {}
-    criteria_count = sum([args.all, bool(args.bag_names), bool(args.file_types)])
-    
-    if criteria_count == 0:
-        print("Error: must specify --bag-names, --file-types, or --all")
-        sys.exit(1)
-    elif criteria_count > 1:
-        print("Error: specify only one of --bag-names, --file-types, or --all")
-        sys.exit(1)
-    
+
     if args.all:
         selection_criteria["all"] = True
     elif args.bag_names:
         selection_criteria["bag_names"] = args.bag_names
-    elif args.file_types:
+    else:
+        print("Error: must specify --bag-names or --all")
+        sys.exit(1)
+
+    # Add file types filter if specified
+    if args.file_types:
         selection_criteria["file_types"] = args.file_types
 
     # load config
@@ -159,6 +157,10 @@ def main():
         print(f"Found {cloud_status.total_samples} samples in cloud ({len(cloud_status.bag_files)} bags)")
     else:
         print("No existing ML data found in cloud")
+
+    
+
+    print(f"\n\n criteria: {selection_criteria}")
 
     # Create transfer job
     job = TransferJob(
