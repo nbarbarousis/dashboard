@@ -1,5 +1,7 @@
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+
+from src.models import RunCoordinate, CloudRawStatus, CloudMLStatus, LocalRawStatus, LocalMLStatus
 
 @dataclass
 class TemporalData:
@@ -47,3 +49,20 @@ class TimelineData:
     timestamps: List[str]
     raw_counts: Dict[str, int]  # timestamp -> bag_count
     ml_counts: Dict[str, int]   # timestamp -> sample_count
+
+@dataclass
+class InventoryItem:
+    """Enhanced inventory item with comparison tags"""
+    coord: RunCoordinate
+    # Raw status (for Raw data views)
+    cloud_raw_status: Optional[CloudRawStatus] = None
+    local_raw_status: Optional[LocalRawStatus] = None
+    # ML status (for ML data views)  
+    cloud_ml_status: Optional[CloudMLStatus] = None
+    local_ml_status: Optional[LocalMLStatus] = None
+    
+    # Sync status tags
+    raw_sync_status: str = "unknown"  # "synced", "cloud_only", "local_only", "mismatch", "missing"
+    ml_sync_status: str = "unknown"   # same values
+    raw_issues: List[str] = field(default_factory=list)  # Specific issues for details
+    ml_issues: List[str] = field(default_factory=list)   # Specific issues for details

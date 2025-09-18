@@ -44,6 +44,14 @@ class RunCoordinate:
             fieldid=filters.get('fieldid', ''), twid=filters.get('twid', ''),
             lbid=filters.get('lbid', ''), timestamp=timestamp
         )
+    
+    @classmethod
+    def from_path_str(cls, path_str: str, separator: str = "/") -> 'RunCoordinate':
+        """Create RunCoordinate from path string."""
+        parts = path_str.split(separator)
+        if len(parts) != 6:
+            raise ValueError(f"Invalid path string: {path_str}")
+        return cls(*parts)
 
 
 class DataStatus(Enum):

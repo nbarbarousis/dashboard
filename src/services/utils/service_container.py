@@ -13,6 +13,7 @@ from ..core.local_state_service import LocalStateService
 from ..core.coordinate_path_builder import CoordinatePathBuilder
 from ..coordination.data_coordination_service import DataCoordinationService
 from ..pages.temporal_coverage_service import TemporalCoverageService
+from ..pages.inventory_view_service import InventoryViewService  
 from ..cloud_operations.cloud_operations_service import CloudOperationService
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class ServiceContainer:
     
     # Page services
     temporal_coverage: TemporalCoverageService
+    inventory_view: InventoryViewService
     
     # Operation services
     cloud_operations: CloudOperationService
@@ -82,6 +84,12 @@ class ServiceContainer:
                 local_service=local_service,
                 path_builder=path_builder
             )
+
+            # 6. Initialize operations view service
+            inventory_view = InventoryViewService(
+                data_coordination=data_coordination
+            )
+
             
             logger.info("All services initialized successfully")
             
@@ -91,7 +99,8 @@ class ServiceContainer:
                 path_builder=path_builder,
                 data_coordination=data_coordination,
                 temporal_coverage=temporal_coverage,
-                cloud_operations=cloud_operations
+                cloud_operations=cloud_operations,
+                inventory_view=inventory_view
             )
             
         except Exception as e:

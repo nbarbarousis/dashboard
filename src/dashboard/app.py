@@ -9,7 +9,7 @@ from typing import Dict, Optional
 from src.models import DashboardConfig
 from src.services import ServiceContainer
 from src.dashboard.utils.session_state import initialize_session_state
-from src.dashboard.pages import temporal_coverage
+from src.dashboard.pages import temporal_coverage, operations
 from src.dashboard.components.filters import HierarchicalFilters
 
 # Configure logging
@@ -28,6 +28,7 @@ class DataOverviewDashboard:
         # Define available pages
         self.pages = {
             "Temporal Coverage": temporal_coverage,
+            "Operations": operations
         }
     
     def run(self):

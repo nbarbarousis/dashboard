@@ -383,7 +383,7 @@ class LocalStateService:
                                     
                                     # Get status for this coordinate
                                     try:
-                                        results[coord] = self.get_raw_status(coord)
+                                        results[coord.to_path_str()] = self.get_raw_status(coord)
                                     except Exception as e:
                                         logger.warning(f"Error getting raw status for {coord}: {e}")
                                         # Continue with other coordinates
@@ -450,7 +450,7 @@ class LocalStateService:
                                     
                                     # Get status for this coordinate
                                     try:
-                                        results[coord] = self.get_ml_status(coord)
+                                        results[coord.to_path_str()] = self.get_ml_status(coord)
                                     except Exception as e:
                                         logger.warning(f"Error getting ML status for {coord}: {e}")
                                         # Continue with other coordinates

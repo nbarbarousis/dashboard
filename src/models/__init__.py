@@ -18,6 +18,7 @@ from .analysis import AnalysisMetrics, AnalysisPlots, RunAnalysis
 
 # Page models
 from .pages import TemporalData, CoverageStatistics, TimelineData, LaserBoxStats, AggregatedTemporalData
+from .pages import InventoryItem
 
 # Config models
 from .config import DashboardConfig, CacheInfo
@@ -36,6 +37,7 @@ __all__ = [
     'AnalysisMetrics', 'AnalysisPlots', 'RunAnalysis',
     # Pages
     'TemporalData', 'CoverageStatistics', 'TimelineData',
+    'InventoryItem', 'LaserBoxStats', 'AggregatedTemporalData',
     # Config
     'DashboardConfig', 'CacheInfo'
 ]
