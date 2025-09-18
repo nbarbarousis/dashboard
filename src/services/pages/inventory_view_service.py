@@ -271,3 +271,30 @@ class InventoryViewService:
             filtered.append(item)
         
         return filtered
+    def get_simple_metrics(self, items: List[InventoryItem]) -> Dict[str, int]:
+        """Get simple 4-value metrics: cloud bags, local bags, cloud samples, local samples."""
+        metrics = {
+            'cloud_bags': 0,
+            'local_bags': 0,
+            'cloud_samples': 0,
+            'local_samples': 0
+        }
+        
+        for item in items:
+            # Cloud bags (raw + ml)
+            if item.cloud_raw_status and item.cloud_raw_status.exists:
+                metrics['cloud_bags'] += item.cloud_raw_status.bag_count
+            
+            # Local bags (raw + ml)  
+            if item.local_raw_status and item.local_raw_status.downloaded:
+                metrics['local_bags'] += item.local_raw_status.bag_count
+            
+            # Cloud ML samples
+            if item.cloud_ml_status and item.cloud_ml_status.exists:
+                metrics['cloud_samples'] += item.cloud_ml_status.total_samples
+            
+            # Local ML samples
+            if item.local_ml_status and item.local_ml_status.downloaded:
+                metrics['local_samples'] += item.local_ml_status.total_samples
+        
+        return metrics
