@@ -42,7 +42,8 @@ class CloudOperationService:
                 success=False,
                 error=f"Unknown operation: {job.operation_type}"
             )
-        
+
+        logger.info(f"Starting operation: {job.operation_type} for coordinate {job.coordinate}, dry_run={job.dry_run}")
         # Instantiate operation with services
         operation_class = self.OPERATIONS[job.operation_type]
         operation = operation_class(
@@ -52,4 +53,6 @@ class CloudOperationService:
             self.gcs_client
         )
         
-        return operation.execute_operation(job)
+        result = operation.execute_operation(job)
+        logger.info(f"Operation result: success={result.success}, error={result.error}")
+        return result

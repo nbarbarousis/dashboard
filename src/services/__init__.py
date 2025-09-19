@@ -12,8 +12,9 @@ from .coordination.data_coordination_service import DataCoordinationService
 
 # Page services
 from .pages.temporal_coverage_service import TemporalCoverageService
+from .pages.inventory_view_service import InventoryViewService  # Future
+from .pages.operations_orchestration_service import OperationsOrchestrationService
 # from .pages.run_analysis_service import RunAnalysisService        # Future
-# from .pages.operations_view_service import OperationsViewService  # Future
 
 # Utility services
 from .utils.service_container import ServiceContainer
@@ -32,6 +33,8 @@ __all__ = [
     
     # Pages
     'TemporalCoverageService',
+    'InventoryViewService',
+    'OperationsOrchestrationService',
     
     # Utils
     'ServiceContainer',

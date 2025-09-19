@@ -10,6 +10,11 @@ from typing import Dict, List, Optional
 from src.services import ServiceContainer
 from src.models import InventoryItem, TransferJob, RunCoordinate
 
+from src.dashboard.components.operations_dialog import (
+    show_operation_dialog, 
+    show_bulk_operation_dialog
+)
+
 
 def render(services: ServiceContainer):
     """Main render function"""
@@ -105,6 +110,9 @@ def render_inventory_view(services: ServiceContainer, filters: Dict):
     st.divider()
     # Show data editor with side panel
     show_data_editor_view(inventory_items, data_type, status_filter, is_raw, services)
+
+    # Check for and display any open dialogs
+    check_and_show_dialogs(services)
 
 
 def show_data_editor_view(items: List[InventoryItem], data_type: str, status_filter: str, is_raw: bool, services: ServiceContainer):
@@ -376,26 +384,92 @@ def render_single_item_actions(item: InventoryItem, is_raw: bool, services: Serv
 
 def execute_single_download(item: InventoryItem, is_raw: bool, services: ServiceContainer):
     """Execute download for a single item"""
-    st.info("🚧 Single download will be implemented")
-    # TODO: Create TransferJob and execute via services.cloud_operations
+    from src.dashboard.components.operations_dialog import show_operation_dialog
+    
+    # Store dialog state in session
+    dialog_key = f"dialog_open_single_{'raw' if is_raw else 'ml'}_download_{item.coord.to_path_str()}"
+    st.session_state[dialog_key] = {
+        'item': item,
+        'operation_type': "raw_download" if is_raw else "ml_download",
+        'is_open': True
+    }
 
 
 def execute_single_upload(item: InventoryItem, services: ServiceContainer):
     """Execute upload for a single item"""
-    st.info("🚧 Single upload will be implemented")
-    # TODO: Create TransferJob and execute via services.cloud_operations
+    from src.dashboard.components.operations_dialog import show_operation_dialog
+    
+    # Store dialog state in session
+    dialog_key = f"dialog_open_single_ml_upload_{item.coord.to_path_str()}"
+    st.session_state[dialog_key] = {
+        'item': item,
+        'operation_type': "ml_upload",
+        'is_open': True
+    }
 
 
 def execute_batch_download(items: List[InventoryItem], is_raw: bool, services: ServiceContainer):
     """Execute batch download operation"""
-    st.info(f"🚧 Batch download of {len(items)} items will be implemented")
-    # TODO: Create multiple TransferJobs or batch TransferJob and execute
+    from src.dashboard.components.operations_dialog import show_bulk_operation_dialog
+    
+    # Store dialog state in session
+    dialog_key = f"dialog_open_batch_{'raw' if is_raw else 'ml'}_download_{len(items)}"
+    st.session_state[dialog_key] = {
+        'items': items,
+        'operation_type': "raw_download" if is_raw else "ml_download",
+        'is_open': True
+    }
 
 
 def execute_batch_upload(items: List[InventoryItem], services: ServiceContainer):
     """Execute batch upload operation"""
-    st.info(f"🚧 Batch upload of {len(items)} items will be implemented")
-    # TODO: Create multiple TransferJobs or batch TransferJob and execute
+    from src.dashboard.components.operations_dialog import show_bulk_operation_dialog
+    
+    # Store dialog state in session  
+    dialog_key = f"dialog_open_batch_ml_upload_{len(items)}"
+    st.session_state[dialog_key] = {
+        'items': items,
+        'operation_type': "ml_upload",
+        'is_open': True
+    }
+
+
+def check_and_show_dialogs(services: ServiceContainer):
+    """Check session state for open dialogs and display them"""
+    from src.dashboard.components.operations_dialog import show_operation_dialog, show_bulk_operation_dialog
+    
+    # Check for any open dialogs in session state
+    keys_to_remove = []
+    
+    for key in st.session_state:
+        if key.startswith("dialog_open_") and isinstance(st.session_state[key], dict):
+            dialog_data = st.session_state[key]
+            
+            if dialog_data.get('is_open'):
+                # Show appropriate dialog
+                if 'item' in dialog_data:
+                    # Single item dialog
+                    show_operation_dialog(
+                        dialog_data['item'],
+                        dialog_data['operation_type'],
+                        services.operations_orchestration,
+                        dialog_key=key  # Pass the key so dialog can close itself
+                    )
+                elif 'items' in dialog_data:
+                    # Bulk operation dialog
+                    show_bulk_operation_dialog(
+                        dialog_data['items'],
+                        dialog_data['operation_type'],
+                        services.operations_orchestration,
+                        dialog_key=key  # Pass the key so dialog can close itself
+                    )
+            else:
+                # Mark for removal if closed
+                keys_to_remove.append(key)
+    
+    # Clean up closed dialogs
+    for key in keys_to_remove:
+        del st.session_state[key]
 
 
 # Keep existing helper functions

@@ -15,6 +15,7 @@ from ..coordination.data_coordination_service import DataCoordinationService
 from ..pages.temporal_coverage_service import TemporalCoverageService
 from ..pages.inventory_view_service import InventoryViewService  
 from ..cloud_operations.cloud_operations_service import CloudOperationService
+from ..pages.operations_orchestration_service import OperationsOrchestrationService
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class ServiceContainer:
     # Page services
     temporal_coverage: TemporalCoverageService
     inventory_view: InventoryViewService
+    operations_orchestration: OperationsOrchestrationService
     
     # Operation services
     cloud_operations: CloudOperationService
@@ -90,6 +92,9 @@ class ServiceContainer:
                 data_coordination=data_coordination
             )
 
+            operations_orchestration = OperationsOrchestrationService(
+                cloud_operations=cloud_operations,
+            )
             
             logger.info("All services initialized successfully")
             
@@ -100,7 +105,8 @@ class ServiceContainer:
                 data_coordination=data_coordination,
                 temporal_coverage=temporal_coverage,
                 cloud_operations=cloud_operations,
-                inventory_view=inventory_view
+                inventory_view=inventory_view,
+                operations_orchestration=operations_orchestration
             )
             
         except Exception as e:
