@@ -27,8 +27,8 @@ class DataOverviewDashboard:
         
         # Define available pages
         self.pages = {
-            "Temporal Coverage": temporal_coverage,
-            "Operations": operations
+            "Coverage Overview": temporal_coverage,
+            "Inventory": operations
         }
     
     def run(self):
@@ -95,12 +95,16 @@ class DataOverviewDashboard:
         self._render_sidebar()
         
         # Get current page selection
-        current_page = st.session_state.get('current_page', 'Temporal Coverage')
+        current_page = st.session_state.get('current_page', 'Coverage Overview')
         
         # Render selected page
         try:
             if current_page in self.pages and self.services:
                 self.pages[current_page].render(self.services)
+
+                if current_page == "Inventory":
+                    from src.dashboard.components.operations_dialog import render_operation_dialogs
+                    render_operation_dialogs()
             else:
                 st.error(f"Page '{current_page}' not found or services not initialized")
                 

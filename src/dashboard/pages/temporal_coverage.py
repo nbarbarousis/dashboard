@@ -28,7 +28,7 @@ def render(services: ServiceContainer):
         st.info(f"Please select: {', '.join(missing_filters)}")
         return
     
-    st.divider()
+    # st.divider()
     
     # Check if this is aggregated view (LB = "All" or None)
     is_aggregated = filters.get('lbid') is None
@@ -84,7 +84,6 @@ def _render_aggregated_view(services: ServiceContainer, filters: Dict):
     
     # Top Section: Daily Aggregated Plots
     with st.container():
-        st.subheader("Aggregated Temporal Coverage - All Laser Boxes")
         _render_aggregated_plots(agg_data)
     
     st.divider()

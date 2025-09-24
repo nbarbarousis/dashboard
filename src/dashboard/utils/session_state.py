@@ -28,7 +28,7 @@ def initialize_session_state() -> None:
     
     # Initialize page navigation
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = 'Temporal Coverage'
+        st.session_state.current_page = 'Coverage Overview'
     
     # Initialize service state
     if 'services_initialized' not in st.session_state:
